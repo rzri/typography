@@ -18,7 +18,7 @@ export const defaultConfig: ThemeConfig = {
       },
       {
         name: 'television-classic',
-        href: 'https://space.bilibili.com/9890808,
+        href: 'https://space.bilibili.com/9890808',
       },
       {
         name: 'rss',
