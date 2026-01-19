@@ -17,8 +17,8 @@ export const defaultConfig: ThemeConfig = {
         href: 'https://github.com/rzri',
       },
       {
-        name: 'sina-weibo',
-        href: 'https://weibo.com/u/5984587828',
+        name: 'television-classic',
+        href: 'https://space.bilibili.com/9890808,
       },
       {
         name: 'rss',
