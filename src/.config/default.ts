@@ -10,7 +10,7 @@ export const defaultConfig: ThemeConfig = {
     author: 'rzri',
     description: 'Rediscory the beauty of typography',
     website: 'https://astro-theme-typography.vercel.app/',
-    pageSize: 5,
+    pageSize: 4,
     socialLinks: [
       {
         name: 'github',
@@ -22,7 +22,7 @@ export const defaultConfig: ThemeConfig = {
       },
       {
         name: 'twitter',
-        href: 'https://x.com/cryoob',
+        href: 'https://x.com/rzri',
       },
       {
         name: 'mastodon',
@@ -72,7 +72,7 @@ export const defaultConfig: ThemeConfig = {
     },
   },
   seo: {
-    twitter: '@cryoob',
+    twitter: '@haenlau',
     meta: [],
     link: [],
   },
