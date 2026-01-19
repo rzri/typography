@@ -1,8 +1,8 @@
 ---
 title: Hexo在Cloudflare文件缓存导致部署失败
 pubDate: 2025-07-16
-categories: ['Articles']
-description: 'descrip'
+categories: ['no-te']
+description: 'Hexo 在 Cloudflare 构建时报错'
 slug: 
 ---
 
