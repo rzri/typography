@@ -1,8 +1,9 @@
 ---
 title: 信创集成项目管理师考试练习
-date: 2025-07-26 10:11:41
-tags:
-  - 资源
+pubDate: 2025-07-26
+categories: ['Articles']
+description: ''
+slug: 
 ---
 
 <p><strong>单选题</strong><br>

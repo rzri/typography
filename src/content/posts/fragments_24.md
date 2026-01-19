@@ -1,8 +1,9 @@
 ---
 title: Hexo修改配置文件允许文章内嵌入html
-date: 2025-08-16 10:03:56
-tags:
-  - Hexo
+pubDate: 2025-07-26
+categories: ['Articles']
+description: ''
+slug: 
 ---
 
 

@@ -1,8 +1,9 @@
 ---
 title: Hexo在Cloudflare日期偏移问题
-date: 2025-08-11 09:10:41
-tags:
-  - Hexo
+pubDate: 2025-07-26
+categories: ['Articles']
+description: ''
+slug: 
 ---
 
 在使用 Hexo 搭建静态站点后使用 Oranges 主题并部署到 Cloudflare Pages 时，可能会遇到一个隐蔽问题：本地预览和部分平台（如腾讯 EdgeOne Pages）显示的日期完全正确，但 Cloudflare Pages 上所有文章的日期却统一提前了一天。

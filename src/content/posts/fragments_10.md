@@ -1,8 +1,9 @@
 ---
 title: Hexo在Cloudflare文件缓存导致部署失败
-date: 2025-07-21 12:56:33
-tags:
-  - Hexo
+pubDate: 2025-07-16
+categories: ['Articles']
+description: ''
+slug: 
 ---
 
 Hexo 在 Cloudflare 构建时报错：layout/index.styl 不存在却报错
