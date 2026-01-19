@@ -46,7 +46,7 @@ export const defaultConfig: ThemeConfig = {
     categoryMap: [{ name: '中文', path: 'zhong-wen' }],
     footer: [
       '© %year <a target="_blank" href="%website">%author</a>',
-      'Theme <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography">Typography</a>',
+      'Theme by<a target="_blank" href="https://github.com/Moeyua/astro-theme-typography">Typography</a>',
       'Proudly published with <a target="_blank" href="https://astro.build/">Astro</a>',
     ],
   },
