@@ -6,9 +6,9 @@ import type { ThemeConfig } from '~/types'
 export const defaultConfig: ThemeConfig = {
   site: {
     title: '本心自昭',
-    subtitle: 'Inherent',
+    subtitle: 'Innatus',
     author: 'rzri',
-    description: 'Rediscory the beauty of typography',
+    description: 'For those who believe truth arises from within.',
     website: 'https://innatus.cn/',
     pageSize: 4,
     socialLinks: [
