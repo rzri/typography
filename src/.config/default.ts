@@ -9,7 +9,7 @@ export const defaultConfig: ThemeConfig = {
     subtitle: 'Inherent',
     author: 'rzri',
     description: 'Rediscory the beauty of typography',
-    website: 'https://astro-theme-typography.vercel.app/',
+    website: 'https://innatus.cn/',
     pageSize: 4,
     socialLinks: [
       {
