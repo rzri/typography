@@ -1,9 +1,9 @@
 ---
-title: Hexo在Cloudflare文件缓存导致部署失败
+title: Hexo部署Cloudflare因缓存误报错误
 pubDate: 2025-07-16
 categories: ['笔记']
-description: 'Hexo 在 Cloudflare 构建时报错'
-slug: 
+description: '本地无xxx文件，Cloudflare Pages因构建缓存误报缺失，清缓存即可解决。'
+slug: hexo-cloudflare-stylus-cache-error
 ---
 
 Hexo 在 Cloudflare 构建时报错：layout/index.styl 不存在却报错

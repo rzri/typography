@@ -10,7 +10,7 @@ export const defaultConfig: ThemeConfig = {
     author: 'rzri',
     description: 'For those who believe truth arises from within.',
     website: 'https://innatus.cn/',
-    pageSize: 4,
+    pageSize: 5,
     socialLinks: [
       {
         name: 'github',
