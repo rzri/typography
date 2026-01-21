@@ -51,7 +51,7 @@ export const defaultConfig: ThemeConfig = {
       { name: '笔记', path: 'note' },
       { name: '碎片', path: 'fragment' },
       { name: '资源', path: 'resource' },
-]
+    ],
     footer: [
       '© %year <a target="_blank" href="%website">%author</a>',
       'Theme by <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography">Typography</a>',
