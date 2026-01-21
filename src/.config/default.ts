@@ -17,8 +17,8 @@ export const defaultConfig: ThemeConfig = {
         href: 'https://github.com/rzri',
       },
       {
-        name: 'television-classic',
-        href: 'https://space.bilibili.com/9890808',
+        name: 'train',
+        href: 'https://www.travellings.cn/go.html',
       },
       {
         name: 'rss',
@@ -39,11 +39,19 @@ export const defaultConfig: ThemeConfig = {
         href: '/categories',
       },
       {
+        name: '开往',
+        href: 'https://www.travellings.cn/go.html',
+      },
+      {
         name: 'About',
         href: '/about',
       },
     ],
-    categoryMap: [{ name: '笔记', path: 'no-te' }],
+    categoryMap: [
+      { name: '笔记', path: 'note' },
+      { name: '碎片', path: 'fragment' },
+      { name: '资源', path: 'resource' },
+]
     footer: [
       '© %year <a target="_blank" href="%website">%author</a>',
       'Theme by <a target="_blank" href="https://github.com/Moeyua/astro-theme-typography">Typography</a>',
@@ -79,7 +87,7 @@ export const defaultConfig: ThemeConfig = {
     // disqus: { shortname: "typography-astro" },
   },
   analytics: {
-    googleAnalyticsId: '',
+    googleAnalyticsId: ' G-E09RHHYSDH ',
     umamiAnalyticsId: '',
   },
   latex: {
