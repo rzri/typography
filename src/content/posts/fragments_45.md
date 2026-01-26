@@ -2,7 +2,7 @@
 title: Fuwari主题自定义：导航栏毛玻璃效果实现
 pubDate: 2025-11-15
 categories: ['笔记']
-description: '在Astro静态站点的Fuwari主题中，通过Tailwind CSS为导航栏添加适配明暗模式的毛玻璃效果。'
+description: '在Fuwari主题中，通过Tailwind CSS为导航栏添加适配明暗模式的毛玻璃效果。'
 slug: fuwari-navbar-frosted-glass
 ---
 

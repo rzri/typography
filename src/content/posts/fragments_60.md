@@ -2,7 +2,7 @@
 title: Fuwari主题自定义社交图标
 pubDate: 2025-12-04
 categories: ['笔记']
-description: '在Fuwari博客主题中，通过配置将默认社交图标替换为line-md风格图标，支持一键复制与无缝集成。'
+description: '在Fuwari博客主题中，通过配置将默认社交图标替换为line-md风格图标。'
 slug: fuwari-custom-social-icons-line-md
 ---
 

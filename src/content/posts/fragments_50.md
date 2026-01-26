@@ -2,7 +2,7 @@
 title: 为Hexo Oranges主题添加自定义导航链接
 pubDate: 2025-11-23
 categories: ['笔记']
-description: '通过修改_config.oranges.yml配置文件，在Oranges主题导航栏中快速添加外部链接，无需新建EJS模板。'
+description: '通过修改_config.oranges.yml配置文件，在Oranges主题导航栏中快速添加外部链接。'
 slug: hexo-oranges-add-nav-link
 ---
 

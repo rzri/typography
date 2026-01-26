@@ -1,8 +1,8 @@
 ---
-title: QQ空间留言备份：青春对话
+title: QQ空间留言备份
 pubDate: 2025-12-25
 categories: ['碎片']
-description: '整理并内嵌QQ空间旧日留言，以网页形式保存那些年未被算法带走的私密对话。'
+description: '整理并内嵌QQ空间旧日留言，以网页形式保存那些年未被时间带走的对话。'
 slug: qq-zone-message-archive
 ---
 
