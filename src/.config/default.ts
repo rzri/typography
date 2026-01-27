@@ -39,10 +39,6 @@ export const defaultConfig: ThemeConfig = {
         href: '/categories',
       },
       {
-        name: '开往',
-        href: 'https://www.travellings.cn/go.html',
-      },
-      {
         name: 'About',
         href: '/about',
       },
