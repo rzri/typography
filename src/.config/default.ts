@@ -7,7 +7,7 @@ export const defaultConfig: ThemeConfig = {
   site: {
     title: '本心自昭',
     subtitle: 'Innatus',
-    author: 'HAN',
+    author: 'Han',
     description: 'For those who believe truth arises from within.',
     website: 'https://innatus.cn/',
     pageSize: 5,
