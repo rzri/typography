@@ -290,7 +290,7 @@ Uptime Kuma 使用 SQLite 存储数据，主要表：
 | `notification` | 告警渠道配置 |
 | `monitor_notification` | 监控项与告警渠道关联 |
 
-### Python 脚本：读取 SQLite 数据库
+### Python 脚本：读取 SQLite 数据库（基础版）
 
 ```python
 #!/usr/bin/env python3
@@ -463,6 +463,45 @@ if __name__ == "__main__":
 python3 uptime_kuma_sqlite_reader.py
 ```
 
+### 完整功能脚本（111.txt）
+
+你提供的 `111.txt` 文件是一个功能完整的脚本，包含以下高级功能：
+
+**核心功能模块：**
+
+1. **多监控项批量处理** - 自动遍历所有监控项
+2. **按监控类型生成定制图表**：
+   - DNSv4/DNSv6：解析状态折线图
+   - HTTPS：可用性面积图
+   - PING/PORT：响应时间 + 连通状态双折线图
+   - Keyword：异常占比扇形图
+3. **Word 报表生成** - 使用 `python-docx` 生成格式化报表
+4. **恶意链接检测** - 爬取网页链接并检测钓鱼/可疑链接
+5. **中文支持** - 完整的中文标签和字体设置
+
+**依赖安装：**
+
+```bash
+pip install requests beautifulsoup4 python-docx matplotlib pandas
+```
+
+**使用方法：**
+
+```bash
+# 交互式选择时间维度
+python3 111.txt
+
+# 或命令行指定时间维度
+python3 111.txt 30 天
+python3 111.txt 7 天
+python3 111.txt 6 个月
+```
+
+**输出示例：**
+
+- 报表文件：`/root/.openclaw/reports/监控总报表_近 30 天_20260311_172200.docx`
+- 包含：监控总览表、各监控项详细数据、可视化图表、恶意链接检测结果
+
 ### 优势对比
 
 | 方式 | API 读取 | SQLite 直接读取 |
@@ -479,7 +518,7 @@ python3 uptime_kuma_sqlite_reader.py
 
 在读取监控数据后，可以添加恶意链接判断功能，检测监控的 URL 是否存在安全风险。
 
-### Python 脚本：恶意链接判断
+### 方案一：独立检测脚本（基础版）
 
 ```python
 #!/usr/bin/env python3
@@ -513,6 +552,72 @@ class MaliciousLinkDetector:
             '.xyz', '.top', '.club', '.work',   # 低价域名
             '.cc', '.pw', '.ws'                 # 隐私保护域名
         ]
+```
+
+### 方案二：集成到报表生成脚本（完整版 - 111.txt）
+
+你提供的脚本包含了完整的恶意链接检测功能，集成在报表生成流程中：
+
+**检测逻辑：**
+
+```python
+def check_malicious_links() -> dict:
+    """
+    随机爬取 50 个链接，检测恶意/钓鱼链接
+    """
+    # 1. 爬取网页所有链接
+    resp = requests.get(TARGET_URL, headers=headers, timeout=15)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    
+    # 2. 提取所有有效链接（去重）
+    all_links = set()
+    for a in soup.find_all("a", href=True):
+        full_url = urljoin(base_url, a["href"])
+        if full_url.startswith(("http://", "https://")):
+            all_links.add(full_url)
+    
+    # 3. 随机选择 50 个链接检测
+    random.shuffle(link_list)
+    target_links = link_list[:MAX_LINK_COUNT]
+    
+    # 4. 检测规则
+    phishing_keywords = ["login", "signin", "verify", "secure", "bank", "pay"]
+    suspicious_suffixes = [".xyz", ".top", ".work", ".click", ".tk", ".ml"]
+    malicious_domains = {"evil.com", "malicious.com"}
+    
+    for link in target_links:
+        # 检测钓鱼关键词
+        # 检测可疑域名后缀
+        # 检测恶意域名黑名单
+        # 检测异常字符/超长 URL
+```
+
+**生成饼状图可视化：**
+
+```python
+def generate_malicious_detection_chart(detection_result):
+    """生成恶意链接检测饼状图"""
+    labels = ["安全链接", "可疑链接", "钓鱼链接"]
+    sizes = [safe, suspicious, phishing]
+    colors = ["#32CD32", "#FFD700", "#DC143C"]
+    
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(sizes, labels=labels, autopct="%1.1f%%", colors=colors)
+    ax.set_title(f"BJLOT 恶意链接检测结果（随机{MAX_LINK_COUNT}个链接）")
+```
+
+**集成到 Word 报表：**
+
+```python
+def add_malicious_detection_section(doc, detection_result):
+    """添加恶意链接检测章节到报表"""
+    doc.add_heading("BJLOT Malicious Link Detection Report", level=2)
+    
+    # 显示检测基本信息
+    # 显示安全状态提示
+    # 显示异常链接列表
+    # 添加饼状图
+```
     
     def check_url_structure(self, url):
         """检查 URL 结构"""
@@ -722,14 +827,21 @@ if __name__ == "__main__":
 ### 安装依赖
 
 ```bash
+# 基础版依赖
 pip install requests python-whois
+
+# 完整版依赖（111.txt 脚本）
+pip install requests beautifulsoup4 python-docx matplotlib pandas
 ```
 
 ### 使用方法
 
 ```bash
-# 运行恶意链接检测
+# 运行基础版恶意链接检测
 python3 malicious_link_detector.py
+
+# 运行完整版报表生成（含恶意链接检测）
+python3 111.txt 30 天
 ```
 
 ---
