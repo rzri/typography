@@ -1,14 +1,14 @@
 ---
 title: Uptime Kuma 监控部署与 OpenClaw 数据集成指南
 pubDate: 2026-03-11
-categories: ['笔记', '监控', 'OpenClaw']
-description: 'Uptime Kuma 监控工具的非 Docker 安装、PM2 进程管理、阿里云安全组配置，以及通过 OpenClaw 读取监控数据生成巡检报告的完整流程。'
+categories: ['笔记', '监控', 'OpenClaw', 'Python']
+description: 'Uptime Kuma 监控工具的非 Docker 安装、PM2 进程管理、阿里云安全组配置，以及通过 OpenClaw 直接读取 SQLite 数据库生成巡检报告并判断恶意链接的完整流程。'
 slug: uptime-kuma-deploy-openclaw-integration
 ---
 
 # Uptime Kuma 监控部署与 OpenClaw 数据集成指南
 
-本文档详细记录 Uptime Kuma 监控工具从安装部署到与 OpenClaw 集成的完整流程，包括非 Docker 环境安装、PM2 进程管理、防火墙配置、API 调用及自动化巡检报告生成。
+本文档详细记录 Uptime Kuma 监控工具从安装部署到与 OpenClaw 集成的完整流程，包括非 Docker 环境安装、PM2 进程管理、防火墙配置、**直接读取 SQLite 数据库**及自动化巡检报告生成，并包含**恶意链接判断功能**。
 
 ## 目录
 
@@ -18,9 +18,10 @@ slug: uptime-kuma-deploy-openclaw-integration
 4. [PM2 进程管理](#pm2-进程管理)
 5. [端口配置与安全组](#端口配置与安全组)
 6. [配置网站监控](#配置网站监控)
-7. [OpenClaw 集成 - 读取监控数据](#openclaw-集成---读取监控数据)
-8. [自动化月度巡检报告](#自动化月度巡检报告)
-9. [常见问题排查](#常见问题排查)
+7. [OpenClaw 集成 - 读取 SQLite 数据库](#openclaw-集成---读取-sqlite-数据库)
+8. [恶意链接判断功能](#恶意链接判断功能)
+9. [自动化月度巡检报告](#自动化月度巡检报告)
+10. [常见问题排查](#常见问题排查)
 
 ---
 
@@ -33,6 +34,7 @@ slug: uptime-kuma-deploy-openclaw-integration
 - **核心能力**：HTTP 关键词校验、JSON 校验、SSL 证书预警、可视化仪表盘、状态页
 - **优势**：零依赖、Docker 一键部署、界面简洁、社区活跃（GitHub 57k+ Star）
 - **适用场景**：个人站点、中小项目、快速搭建状态监控
+- **数据存储**：SQLite 数据库（`~/uptime-kuma/data/db.sqlite`）
 
 ---
 
@@ -44,6 +46,7 @@ slug: uptime-kuma-deploy-openclaw-integration
 - **Node.js**：≥ 20.4
 - **Git**：必需
 - **PM2**：推荐（用于后台运行）
+- **Python**：3.8+（用于数据读取脚本）
 
 ### 1. 检查 Node.js 版本
 
@@ -208,7 +211,7 @@ sudo ufw status numbered
 **验证访问：**
 ```bash
 # 本地浏览器访问
-http://云主机公网IP:3001
+http://云主机公网 IP:3001
 ```
 
 ---
@@ -266,91 +269,117 @@ http://云主机公网IP:3001
 
 ---
 
-## OpenClaw 集成 - 读取监控数据
+## OpenClaw 集成 - 读取 SQLite 数据库
 
-### 前置准备：获取 API Token
+> **重要说明**：通过 API 方式读取监控数据需要配置 Token 且功能受限，**推荐直接读取 Uptime Kuma 的 SQLite 数据库**，数据更完整、无需认证、查询更灵活。
 
-1. 登录 Uptime Kuma 后台
-2. 点击右上角头像 → **API Tokens** → **Add Token**
-3. 填写名称（如 `openclaw-access`），权限选择 `Read Only`
-4. 保存并复制 Token（如 `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`）
+### 数据库位置
 
-### Python 脚本：调用 Uptime Kuma API
+```bash
+~/uptime-kuma/data/db.sqlite
+```
+
+### 数据库表结构
+
+Uptime Kuma 使用 SQLite 存储数据，主要表：
+
+| 表名 | 说明 |
+|------|------|
+| `monitor` | 监控项配置（名称、URL、类型等） |
+| `heartbeat` | 心跳记录（每次检测的结果） |
+| `notification` | 告警渠道配置 |
+| `monitor_notification` | 监控项与告警渠道关联 |
+
+### Python 脚本：读取 SQLite 数据库
 
 ```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Uptime Kuma 监控数据读取脚本
-用于 OpenClaw 集成，获取监控项状态和历史心跳数据
+Uptime Kuma 监控数据读取脚本（SQLite 数据库方式）
+用于 OpenClaw 集成，直接读取 db.sqlite 获取监控数据
 """
 
-import requests
+import sqlite3
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # ==================== 配置项 ====================
-KUMA_URL = "http://你的云主机 IP:3001"  # 替换为实际地址
-KUMA_TOKEN = "你的 API Token"  # 替换为生成的 Token
-MONITOR_NAME = "北京体彩网"  # 要读取的监控项名称
+# Uptime Kuma 数据目录路径
+KUMA_DATA_DIR = Path.home() / "uptime-kuma" / "data"
+DB_PATH = KUMA_DATA_DIR / "db.sqlite"
 # =============================================
 
-# 初始化请求头（带 Token 认证）
-headers = {
-    "Authorization": f"Bearer {KUMA_TOKEN}",
-    "Content-Type": "application/json"
-}
+
+def get_db_connection():
+    """获取数据库连接"""
+    if not DB_PATH.exists():
+        raise FileNotFoundError(f"数据库文件不存在：{DB_PATH}")
+    
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row  # 使结果可以按列名访问
+    return conn
 
 
 def get_all_monitors():
-    """获取所有监控项列表（含 ID、名称、状态）"""
-    url = f"{KUMA_URL}/api/monitor"
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        monitors = response.json()
-        print("✅ 所有监控项列表：")
-        for m in monitors:
-            status = '在线' if m['status'] == 1 else '离线'
-            print(f"  ID: {m['id']}, 名称：{m['name']}, 状态：{status}")
-        return monitors
-    except Exception as e:
-        print(f"❌ 获取监控列表失败：{str(e)}")
-        return None
+    """获取所有监控项列表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT id, name, url, type, interval, hostname, port, path, 
+               keyword, expiryNotification, status
+        FROM monitor
+        ORDER BY id
+    """)
+    
+    monitors = []
+    for row in cursor.fetchall():
+        monitors.append({
+            "id": row["id"],
+            "name": row["name"],
+            "url": row["url"],
+            "type": row["type"],
+            "interval": row["interval"],
+            "hostname": row["hostname"],
+            "port": row["port"],
+            "path": row["path"],
+            "keyword": row["keyword"],
+            "expiry_notification": row["expiryNotification"],
+            "status": "在线" if row["status"] == 1 else "离线"
+        })
+    
+    conn.close()
+    return monitors
 
 
 def get_monitor_heartbeats(monitor_id, days=30):
-    """获取指定监控项的历史心跳数据（默认近 30 天）"""
-    end_time = datetime.now().timestamp() * 1000  # 毫秒时间戳
-    start_time = (datetime.now() - timedelta(days=days)).timestamp() * 1000
+    """获取指定监控项的历史心跳数据"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    url = f"{KUMA_URL}/api/heartbeat/{monitor_id}"
-    params = {
-        "start": int(start_time),
-        "end": int(end_time)
-    }
+    # 计算时间范围
+    start_time = (datetime.now() - timedelta(days=days)).timestamp()
     
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
-        response.raise_for_status()
-        heartbeats = response.json()
-        
-        # 解析关键数据
-        parsed_data = []
-        for hb in heartbeats:
-            parsed_data.append({
-                "时间": datetime.fromtimestamp(hb["time"]/1000).strftime("%Y-%m-%d %H:%M:%S"),
-                "状态": "成功" if hb["status"] == 1 else "失败",
-                "响应时间 (ms)": hb["ping"] if hb["ping"] else 0,
-                "错误信息": hb["msg"] if hb["msg"] else "无"
-            })
-        
-        print(f"\n✅ 监控项【{MONITOR_NAME}】近{days}天历史数据（前 10 条）：")
-        print(json.dumps(parsed_data[:10], ensure_ascii=False, indent=2))
-        return parsed_data
-    except Exception as e:
-        print(f"❌ 获取历史心跳数据失败：{str(e)}")
-        return None
+    cursor.execute("""
+        SELECT time, status, ping, msg
+        FROM heartbeat
+        WHERE monitor_id = ? AND time >= ?
+        ORDER BY time DESC
+    """, (monitor_id, start_time))
+    
+    heartbeats = []
+    for row in cursor.fetchall():
+        heartbeats.append({
+            "时间": datetime.fromtimestamp(row["time"]).strftime("%Y-%m-%d %H:%M:%S"),
+            "状态": "成功" if row["status"] == 1 else "失败",
+            "响应时间 (ms)": row["ping"] if row["ping"] else 0,
+            "错误信息": row["msg"] if row["msg"] else "无"
+        })
+    
+    conn.close()
+    return heartbeats
 
 
 def calculate_statistics(heartbeats):
@@ -362,7 +391,10 @@ def calculate_statistics(heartbeats):
     success = sum(1 for h in heartbeats if h["状态"] == "成功")
     failed = total - success
     availability = (success / total * 100) if total > 0 else 0
-    avg_response = sum(h["响应时间 (ms)"] for h in heartbeats) / total if total > 0 else 0
+    
+    # 计算平均响应时间（排除失败请求）
+    response_times = [h["响应时间 (ms)"] for h in heartbeats if h["状态"] == "成功" and h["响应时间 (ms)"] > 0]
+    avg_response = sum(response_times) / len(response_times) if response_times else 0
     
     return {
         "总检测次数": total,
@@ -374,35 +406,42 @@ def calculate_statistics(heartbeats):
 
 
 def main():
-    # 第一步：获取所有监控项，找到目标监控项的 ID
+    # 第一步：获取所有监控项
+    print("📊 获取所有监控项...")
     monitors = get_all_monitors()
-    if not monitors:
-        return
     
-    target_monitor = next((m for m in monitors if m["name"] == MONITOR_NAME), None)
+    print(f"✅ 共找到 {len(monitors)} 个监控项：")
+    for m in monitors:
+        print(f"  ID: {m['id']}, 名称：{m['name']}, 状态：{m['status']}")
+    
+    # 第二步：选择目标监控项（示例：北京体彩网）
+    target_name = "北京体彩网"
+    target_monitor = next((m for m in monitors if m["name"] == target_name), None)
+    
     if not target_monitor:
-        print(f"❌ 未找到监控项：{MONITOR_NAME}")
+        print(f"❌ 未找到监控项：{target_name}")
         return
     
-    print(f"\n✅ 找到目标监控项：ID={target_monitor['id']}, 名称={target_monitor['name']}")
+    print(f"\n✅ 选择监控项：{target_monitor['name']} (ID: {target_monitor['id']})")
     
-    # 第二步：获取历史心跳数据
+    # 第三步：获取历史心跳数据
+    print(f"\n📈 获取近 30 天历史数据...")
     heartbeats = get_monitor_heartbeats(target_monitor['id'], days=30)
-    if not heartbeats:
-        return
+    print(f"✅ 共获取 {len(heartbeats)} 条心跳记录")
     
-    # 第三步：计算统计数据
+    # 第四步：计算统计数据
     stats = calculate_statistics(heartbeats)
     print(f"\n📊 统计数据：")
     print(json.dumps(stats, ensure_ascii=False, indent=2))
     
-    # 第四步：导出为 JSON 文件（供 OpenClaw 使用）
+    # 第五步：导出为 JSON 文件
     output = {
-        "监控项": MONITOR_NAME,
+        "监控项": target_monitor['name'],
+        "URL": target_monitor['url'],
         "统计周期": "近 30 天",
         "生成时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "统计数据": stats,
-        "详细数据": heartbeats
+        "详细数据": heartbeats[:100]  # 只导出前 100 条详细数据
     }
     
     output_file = f"uptime_kuma_report_{datetime.now().strftime('%Y%m%d')}.json"
@@ -418,10 +457,280 @@ if __name__ == "__main__":
 
 ### 使用方法
 
-1. 修改脚本中的配置项（`KUMA_URL`、`KUMA_TOKEN`、`MONITOR_NAME`）
-2. 安装依赖：`pip install requests`
-3. 运行脚本：`python3 uptime_kuma_monitor.py`
-4. 输出 JSON 文件可供 OpenClaw 读取并生成报告
+```bash
+# 安装依赖（SQLite 是 Python 内置模块，无需额外安装）
+# 运行脚本
+python3 uptime_kuma_sqlite_reader.py
+```
+
+### 优势对比
+
+| 方式 | API 读取 | SQLite 直接读取 |
+|------|---------|----------------|
+| 配置复杂度 | 需要生成 Token | 无需配置 |
+| 数据完整性 | 部分字段 | 全部字段 |
+| 查询灵活性 | 受限 | 完全灵活 |
+| 性能 | 网络请求 | 本地读取 |
+| 推荐度 | ⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+---
+
+## 恶意链接判断功能
+
+在读取监控数据后，可以添加恶意链接判断功能，检测监控的 URL 是否存在安全风险。
+
+### Python 脚本：恶意链接判断
+
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+恶意链接判断脚本
+检测 URL 是否存在安全风险（钓鱼、恶意软件、异常重定向等）
+"""
+
+import re
+import socket
+import ssl
+from urllib.parse import urlparse
+from datetime import datetime
+import whois
+
+
+class MaliciousLinkDetector:
+    """恶意链接检测器"""
+    
+    def __init__(self):
+        # 常见钓鱼网站特征
+        self.phishing_keywords = [
+            'login', 'signin', 'account', 'verify', 'secure',
+            'update', 'confirm', 'suspended', 'limited'
+        ]
+        
+        # 可疑顶级域名
+        self.suspicious_tlds = [
+            '.tk', '.ml', '.ga', '.cf', '.gq',  # 免费域名
+            '.xyz', '.top', '.club', '.work',   # 低价域名
+            '.cc', '.pw', '.ws'                 # 隐私保护域名
+        ]
+    
+    def check_url_structure(self, url):
+        """检查 URL 结构"""
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        
+        issues = []
+        
+        # 检查是否使用 HTTPS
+        if parsed.scheme != 'https':
+            issues.append("⚠️ 未使用 HTTPS 加密")
+        
+        # 检查域名长度（过长可能是钓鱼）
+        if len(hostname) > 50:
+            issues.append("⚠️ 域名过长，可能是钓鱼网站")
+        
+        # 检查是否包含 IP 地址
+        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', hostname):
+            issues.append("⚠️ 直接使用 IP 地址，不推荐")
+        
+        # 检查是否包含可疑关键词
+        for keyword in self.phishing_keywords:
+            if keyword in hostname.lower():
+                issues.append(f"⚠️ 域名包含可疑关键词：{keyword}")
+                break
+        
+        # 检查可疑顶级域名
+        for tld in self.suspicious_tlds:
+            if hostname.endswith(tld):
+                issues.append(f"⚠️ 使用可疑顶级域名：{tld}")
+                break
+        
+        return issues
+    
+    def check_ssl_certificate(self, url):
+        """检查 SSL 证书"""
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        
+        if parsed.scheme != 'https':
+            return ["⚠️ 未使用 HTTPS，无法检查 SSL 证书"]
+        
+        issues = []
+        
+        try:
+            # 获取 SSL 证书信息
+            context = ssl.create_default_context()
+            with socket.create_connection((hostname, 443), timeout=5) as sock:
+                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    cert = ssock.getpeercert()
+                    
+                    # 检查证书有效期
+                    not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+                    days_remaining = (not_after - datetime.now()).days
+                    
+                    if days_remaining < 30:
+                        issues.append(f"⚠️ SSL 证书即将过期（剩余{days_remaining}天）")
+                    elif days_remaining < 0:
+                        issues.append("❌ SSL 证书已过期")
+                    
+                    # 检查证书颁发机构
+                    issuer = dict(x[0] for x in cert['issuer'])
+                    if 'Let\'s Encrypt' in str(issuer):
+                        pass  # Let's Encrypt 是合法的
+                    elif not issuer:
+                        issues.append("⚠️ 自签名证书，存在风险")
+        
+        except Exception as e:
+            issues.append(f"❌ SSL 证书检查失败：{str(e)}")
+        
+        return issues
+    
+    def check_domain_age(self, url):
+        """检查域名注册时长"""
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        
+        # 移除 www.前缀
+        if hostname.startswith('www.'):
+            hostname = hostname[4:]
+        
+        try:
+            w = whois.whois(hostname)
+            creation_date = w.creation_date
+            
+            # whois 返回的可能是列表
+            if isinstance(creation_date, list):
+                creation_date = creation_date[0]
+            
+            if creation_date:
+                age_days = (datetime.now() - creation_date).days
+                
+                if age_days < 30:
+                    return [f"⚠️ 域名注册时间很短（{age_days}天），可能是新注册的恶意域名"]
+                elif age_days < 90:
+                    return [f"⚠️ 域名较新（{age_days}天），需保持警惕"]
+        except Exception as e:
+            return [f"ℹ️ 无法查询域名注册信息：{str(e)}"]
+        
+        return []
+    
+    def check_redirect(self, url):
+        """检查 URL 重定向"""
+        import requests
+        
+        try:
+            response = requests.get(url, timeout=10, allow_redirects=False)
+            
+            if response.status_code in [301, 302, 307, 308]:
+                redirect_url = response.headers.get('Location', '')
+                return [f"⚠️ 存在重定向：{redirect_url}"]
+        except Exception as e:
+            return [f"❌ 重定向检查失败：{str(e)}"]
+        
+        return []
+    
+    def analyze(self, url):
+        """综合分析 URL"""
+        print(f"\n🔍 分析 URL: {url}")
+        print("=" * 60)
+        
+        all_issues = []
+        
+        # 1. 检查 URL 结构
+        print("\n📋 检查 URL 结构...")
+        issues = self.check_url_structure(url)
+        all_issues.extend(issues)
+        for issue in issues:
+            print(f"  {issue}")
+        if not issues:
+            print("  ✅ URL 结构正常")
+        
+        # 2. 检查 SSL 证书
+        print("\n🔒 检查 SSL 证书...")
+        issues = self.check_ssl_certificate(url)
+        all_issues.extend(issues)
+        for issue in issues:
+            print(f"  {issue}")
+        if not issues:
+            print("  ✅ SSL 证书正常")
+        
+        # 3. 检查域名注册时长
+        print("\n📅 检查域名注册时长...")
+        issues = self.check_domain_age(url)
+        all_issues.extend(issues)
+        for issue in issues:
+            print(f"  {issue}")
+        if not issues:
+            print("  ✅ 域名注册时长正常")
+        
+        # 4. 检查重定向
+        print("\n🔄 检查重定向...")
+        issues = self.check_redirect(url)
+        all_issues.extend(issues)
+        for issue in issues:
+            print(f"  {issue}")
+        if not issues:
+            print("  ✅ 无重定向")
+        
+        # 综合评估
+        print("\n" + "=" * 60)
+        if len(all_issues) == 0:
+            print("✅ 综合评估：安全")
+        elif len(all_issues) <= 2:
+            print("⚠️ 综合评估：低风险（发现少量问题）")
+        else:
+            print("❌ 综合评估：高风险（发现多个问题）")
+        
+        print(f"\n共发现 {len(all_issues)} 个问题：")
+        for issue in all_issues:
+            print(f"  - {issue}")
+        
+        return {
+            "url": url,
+            "issues": all_issues,
+            "risk_level": "安全" if len(all_issues) == 0 else "低风险" if len(all_issues) <= 2 else "高风险"
+        }
+
+
+def main():
+    """主函数"""
+    detector = MaliciousLinkDetector()
+    
+    # 示例：检测北京体彩网
+    urls = [
+        "https://www.bjlot.com.cn",
+        # 可以添加更多需要检测的 URL
+    ]
+    
+    results = []
+    for url in urls:
+        result = detector.analyze(url)
+        results.append(result)
+    
+    # 导出结果
+    output_file = f"malicious_link_check_{datetime.now().strftime('%Y%m%d')}.json"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    
+    print(f"\n💾 检测结果已导出至：{output_file}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 安装依赖
+
+```bash
+pip install requests python-whois
+```
+
+### 使用方法
+
+```bash
+# 运行恶意链接检测
+python3 malicious_link_detector.py
+```
 
 ---
 
@@ -438,15 +747,16 @@ if __name__ == "__main__":
 
 ### 报告生成流程
 
-1. **拉取数据**：调用 Uptime Kuma API 获取上月监控数据
+1. **读取数据**：直接读取 Uptime Kuma 的 SQLite 数据库
 2. **清洗统计**：
    - 可用性百分比
    - 平均响应时间
    - 故障次数和时长
    - SSL 证书状态
-3. **生成图表**：使用 ECharts 或 Matplotlib 生成趋势图
-4. **填充模板**：按巡检报告模板生成 Word/PDF
-5. **发送报告**：通过邮件/钉钉/企业微信发送
+3. **恶意链接检测**：对监控的 URL 进行安全风险评估
+4. **生成图表**：使用 Matplotlib 生成趋势图
+5. **填充模板**：按巡检报告模板生成 Word/PDF
+6. **发送报告**：通过邮件/钉钉/企业微信发送
 
 ### 报告模板示例
 
@@ -458,13 +768,13 @@ if __name__ == "__main__":
 
 ## 监控概览
 
-| 监控项 | 可用性 | 平均响应时间 | 故障次数 |
-|--------|--------|-------------|----------|
-| 北京体彩网 | 99.85% | 245ms | 3 |
+| 监控项 | 可用性 | 平均响应时间 | 故障次数 | 安全风险 |
+|--------|--------|-------------|----------|---------|
+| 北京体彩网 | 99.85% | 245ms | 3 | 安全 |
 
 ## 可用性趋势图
 
-[插入 ECharts 趋势图]
+[插入 Matplotlib 趋势图]
 
 ## 故障详情
 
@@ -477,6 +787,12 @@ if __name__ == "__main__":
 | 域名 | 过期时间 | 剩余天数 |
 |------|---------|---------|
 | www.bjlot.com.cn | 2026-12-15 | 289 |
+
+## 恶意链接检测结果
+
+| 监控项 | URL | 风险等级 | 问题数量 |
+|--------|-----|---------|---------|
+| 北京体彩网 | https://www.bjlot.com.cn | 安全 | 0 |
 ```
 
 ---
@@ -522,19 +838,22 @@ npm run setup
 pm2 restart uptime-kuma
 ```
 
-### 问题 3：API 调用失败
+### 问题 3：SQLite 数据库读取失败
 
 **可能原因**：
 
-1. Token 无效或过期 → 重新生成 Token
-2. 网络不通 → 检查服务器能否访问 Kuma 地址
-3. 权限不足 → 确认 Token 权限为 Read Only 或更高
+1. 数据库路径错误 → 确认 `~/uptime-kuma/data/db.sqlite` 存在
+2. 数据库被锁定 → 确保 Uptime Kuma 进程正常运行
+3. 权限不足 → 使用 `chmod 644 ~/uptime-kuma/data/db.sqlite`
 
 **测试命令**：
 
 ```bash
-curl -H "Authorization: Bearer 你的 Token" \
-     http://云主机IP:3001/api/monitor
+# 检查数据库文件
+ls -la ~/uptime-kuma/data/db.sqlite
+
+# 使用 sqlite3 命令行测试
+sqlite3 ~/uptime-kuma/data/db.sqlite "SELECT name FROM monitor LIMIT 5;"
 ```
 
 ### 问题 4：云主机无法访问
@@ -555,9 +874,13 @@ curl -H "Authorization: Bearer 你的 Token" \
 - [PM2 官方文档](https://pm2.keymetrics.io/docs/usage/quick-start/)
 - [阿里云安全组配置](https://help.aliyun.com/document_detail/25471.html)
 - [OpenClaw 文档](https://docs.openclaw.ai)
+- [SQLite Python 文档](https://docs.python.org/zh-cn/3/library/sqlite3.html)
 
 ---
 
 ## 更新日志
 
 - **2026-03-11**: 初始版本，完整记录 Uptime Kuma 安装、配置及 OpenClaw 集成流程
+  - 采用 SQLite 直接读取方式（非 API）
+  - 增加恶意链接判断功能
+  - 完善月度巡检报告生成方案
