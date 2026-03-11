@@ -2,13 +2,13 @@
 title: Uptime Kuma 监控部署与 OpenClaw 数据集成指南
 pubDate: 2026-03-11
 categories: ['笔记', '监控', 'OpenClaw', 'Python']
-description: 'Uptime Kuma 监控工具的非 Docker 安装、PM2 进程管理、阿里云安全组配置，以及通过 OpenClaw 直接读取 SQLite 数据库生成巡检报告并判断恶意链接的完整流程。'
+description: 'Uptime Kuma 监控工具的非 Docker 安装、PM2 进程管理、阿里云安全组配置，以及通过 OpenClaw 直接读取 SQLite 数据库生成 Word 巡检报告（含中文字体设置、恶意链接检测）的完整流程。'
 slug: uptime-kuma-deploy-openclaw-integration
 ---
 
 # Uptime Kuma 监控部署与 OpenClaw 数据集成指南
 
-本文档详细记录 Uptime Kuma 监控工具从安装部署到与 OpenClaw 集成的完整流程，包括非 Docker 环境安装、PM2 进程管理、防火墙配置、**直接读取 SQLite 数据库**及自动化巡检报告生成，并包含**恶意链接判断功能**。
+本文档详细记录 Uptime Kuma 监控工具从安装部署到与 OpenClaw 集成的完整流程，包括非 Docker 环境安装、PM2 进程管理、防火墙配置、**直接读取 SQLite 数据库**及**生成 Word 巡检报告**，并包含**恶意链接判断功能**和**中文字体设置**。
 
 ## 目录
 
@@ -19,9 +19,10 @@ slug: uptime-kuma-deploy-openclaw-integration
 5. [端口配置与安全组](#端口配置与安全组)
 6. [配置网站监控](#配置网站监控)
 7. [OpenClaw 集成 - 读取 SQLite 数据库](#openclaw-集成---读取-sqlite-数据库)
-8. [恶意链接判断功能](#恶意链接判断功能)
-9. [自动化月度巡检报告](#自动化月度巡检报告)
-10. [常见问题排查](#常见问题排查)
+8. [Word 报表生成（含中文字体设置）](#word-报表生成含中文字体设置)
+9. [恶意链接检测功能](#恶意链接检测功能)
+10. [按监控类型生成定制图表](#按监控类型生成定制图表)
+11. [常见问题排查](#常见问题排查)
 
 ---
 
@@ -276,7 +277,7 @@ http://云主机公网 IP:3001
 ### 数据库位置
 
 ```bash
-~/uptime-kuma/data/db.sqlite
+/root/uptime-kuma/data/kuma.db
 ```
 
 ### 数据库表结构
@@ -287,278 +288,114 @@ Uptime Kuma 使用 SQLite 存储数据，主要表：
 |------|------|
 | `monitor` | 监控项配置（名称、URL、类型等） |
 | `heartbeat` | 心跳记录（每次检测的结果） |
-| `notification` | 告警渠道配置 |
-| `monitor_notification` | 监控项与告警渠道关联 |
 
-### Python 脚本：读取 SQLite 数据库（基础版）
+### 核心查询 SQL
 
-```python
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Uptime Kuma 监控数据读取脚本（SQLite 数据库方式）
-用于 OpenClaw 集成，直接读取 db.sqlite 获取监控数据
-"""
+```sql
+-- 获取所有监控项
+SELECT id, name FROM monitor;
 
-import sqlite3
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
-
-# ==================== 配置项 ====================
-# Uptime Kuma 数据目录路径
-KUMA_DATA_DIR = Path.home() / "uptime-kuma" / "data"
-DB_PATH = KUMA_DATA_DIR / "db.sqlite"
-# =============================================
-
-
-def get_db_connection():
-    """获取数据库连接"""
-    if not DB_PATH.exists():
-        raise FileNotFoundError(f"数据库文件不存在：{DB_PATH}")
-    
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row  # 使结果可以按列名访问
-    return conn
-
-
-def get_all_monitors():
-    """获取所有监控项列表"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT id, name, url, type, interval, hostname, port, path, 
-               keyword, expiryNotification, status
-        FROM monitor
-        ORDER BY id
-    """)
-    
-    monitors = []
-    for row in cursor.fetchall():
-        monitors.append({
-            "id": row["id"],
-            "name": row["name"],
-            "url": row["url"],
-            "type": row["type"],
-            "interval": row["interval"],
-            "hostname": row["hostname"],
-            "port": row["port"],
-            "path": row["path"],
-            "keyword": row["keyword"],
-            "expiry_notification": row["expiryNotification"],
-            "status": "在线" if row["status"] == 1 else "离线"
-        })
-    
-    conn.close()
-    return monitors
-
-
-def get_monitor_heartbeats(monitor_id, days=30):
-    """获取指定监控项的历史心跳数据"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # 计算时间范围
-    start_time = (datetime.now() - timedelta(days=days)).timestamp()
-    
-    cursor.execute("""
-        SELECT time, status, ping, msg
-        FROM heartbeat
-        WHERE monitor_id = ? AND time >= ?
-        ORDER BY time DESC
-    """, (monitor_id, start_time))
-    
-    heartbeats = []
-    for row in cursor.fetchall():
-        heartbeats.append({
-            "时间": datetime.fromtimestamp(row["time"]).strftime("%Y-%m-%d %H:%M:%S"),
-            "状态": "成功" if row["status"] == 1 else "失败",
-            "响应时间 (ms)": row["ping"] if row["ping"] else 0,
-            "错误信息": row["msg"] if row["msg"] else "无"
-        })
-    
-    conn.close()
-    return heartbeats
-
-
-def calculate_statistics(heartbeats):
-    """计算监控统计数据"""
-    if not heartbeats:
-        return None
-    
-    total = len(heartbeats)
-    success = sum(1 for h in heartbeats if h["状态"] == "成功")
-    failed = total - success
-    availability = (success / total * 100) if total > 0 else 0
-    
-    # 计算平均响应时间（排除失败请求）
-    response_times = [h["响应时间 (ms)"] for h in heartbeats if h["状态"] == "成功" and h["响应时间 (ms)"] > 0]
-    avg_response = sum(response_times) / len(response_times) if response_times else 0
-    
-    return {
-        "总检测次数": total,
-        "成功次数": success,
-        "失败次数": failed,
-        "可用性 (%)": round(availability, 2),
-        "平均响应时间 (ms)": round(avg_response, 2)
-    }
-
-
-def main():
-    # 第一步：获取所有监控项
-    print("📊 获取所有监控项...")
-    monitors = get_all_monitors()
-    
-    print(f"✅ 共找到 {len(monitors)} 个监控项：")
-    for m in monitors:
-        print(f"  ID: {m['id']}, 名称：{m['name']}, 状态：{m['status']}")
-    
-    # 第二步：选择目标监控项（示例：北京体彩网）
-    target_name = "北京体彩网"
-    target_monitor = next((m for m in monitors if m["name"] == target_name), None)
-    
-    if not target_monitor:
-        print(f"❌ 未找到监控项：{target_name}")
-        return
-    
-    print(f"\n✅ 选择监控项：{target_monitor['name']} (ID: {target_monitor['id']})")
-    
-    # 第三步：获取历史心跳数据
-    print(f"\n📈 获取近 30 天历史数据...")
-    heartbeats = get_monitor_heartbeats(target_monitor['id'], days=30)
-    print(f"✅ 共获取 {len(heartbeats)} 条心跳记录")
-    
-    # 第四步：计算统计数据
-    stats = calculate_statistics(heartbeats)
-    print(f"\n📊 统计数据：")
-    print(json.dumps(stats, ensure_ascii=False, indent=2))
-    
-    # 第五步：导出为 JSON 文件
-    output = {
-        "监控项": target_monitor['name'],
-        "URL": target_monitor['url'],
-        "统计周期": "近 30 天",
-        "生成时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "统计数据": stats,
-        "详细数据": heartbeats[:100]  # 只导出前 100 条详细数据
-    }
-    
-    output_file = f"uptime_kuma_report_{datetime.now().strftime('%Y%m%d')}.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
-    
-    print(f"\n💾 数据已导出至：{output_file}")
-
-
-if __name__ == "__main__":
-    main()
+-- 获取指定监控项的历史心跳数据
+SELECT time, status, ping, msg 
+FROM heartbeat 
+WHERE monitor_id=? AND time >= ?
+ORDER BY time DESC;
 ```
-
-### 使用方法
-
-```bash
-# 安装依赖（SQLite 是 Python 内置模块，无需额外安装）
-# 运行脚本
-python3 uptime_kuma_sqlite_reader.py
-```
-
-### 完整功能脚本（111.txt）
-
-你提供的 `111.txt` 文件是一个功能完整的脚本，包含以下高级功能：
-
-**核心功能模块：**
-
-1. **多监控项批量处理** - 自动遍历所有监控项
-2. **按监控类型生成定制图表**：
-   - DNSv4/DNSv6：解析状态折线图
-   - HTTPS：可用性面积图
-   - PING/PORT：响应时间 + 连通状态双折线图
-   - Keyword：异常占比扇形图
-3. **Word 报表生成** - 使用 `python-docx` 生成格式化报表
-4. **恶意链接检测** - 爬取网页链接并检测钓鱼/可疑链接
-5. **中文支持** - 完整的中文标签和字体设置
-
-**依赖安装：**
-
-```bash
-pip install requests beautifulsoup4 python-docx matplotlib pandas
-```
-
-**使用方法：**
-
-```bash
-# 交互式选择时间维度
-python3 111.txt
-
-# 或命令行指定时间维度
-python3 111.txt 30 天
-python3 111.txt 7 天
-python3 111.txt 6 个月
-```
-
-**输出示例：**
-
-- 报表文件：`/root/.openclaw/reports/监控总报表_近 30 天_20260311_172200.docx`
-- 包含：监控总览表、各监控项详细数据、可视化图表、恶意链接检测结果
-
-### 优势对比
-
-| 方式 | API 读取 | SQLite 直接读取 |
-|------|---------|----------------|
-| 配置复杂度 | 需要生成 Token | 无需配置 |
-| 数据完整性 | 部分字段 | 全部字段 |
-| 查询灵活性 | 受限 | 完全灵活 |
-| 性能 | 网络请求 | 本地读取 |
-| 推荐度 | ⭐⭐ | ⭐⭐⭐⭐⭐ |
 
 ---
 
-## 恶意链接判断功能
+## Word 报表生成（含中文字体设置）
 
-在读取监控数据后，可以添加恶意链接判断功能，检测监控的 URL 是否存在安全风险。
+### 完整功能脚本说明
 
-### 方案一：独立检测脚本（基础版）
+提供的完整脚本（111.txt）包含以下核心功能：
+
+**1. 参数解析**
+- 支持 OpenClaw 对话调用（JSON 字符串）
+- 支持命令行直接调用
+- 支持时间维度：7 天、15 天、30 天、6 个月、12 个月
+
+**2. 中文字体设置（关键！）**
 
 ```python
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-恶意链接判断脚本
-检测 URL 是否存在安全风险（钓鱼、恶意软件、异常重定向等）
-"""
+from docx.shared import Pt, RGBColor
+from docx.oxml.ns import qn
 
-import re
-import socket
-import ssl
-from urllib.parse import urlparse
-from datetime import datetime
-import whois
-
-
-class MaliciousLinkDetector:
-    """恶意链接检测器"""
-    
-    def __init__(self):
-        # 常见钓鱼网站特征
-        self.phishing_keywords = [
-            'login', 'signin', 'account', 'verify', 'secure',
-            'update', 'confirm', 'suspended', 'limited'
-        ]
-        
-        # 可疑顶级域名
-        self.suspicious_tlds = [
-            '.tk', '.ml', '.ga', '.cf', '.gq',  # 免费域名
-            '.xyz', '.top', '.club', '.work',   # 低价域名
-            '.cc', '.pw', '.ws'                 # 隐私保护域名
-        ]
+def set_chinese_font(run, font_name="宋体", size=10, color=RGBColor(0, 0, 0)):
+    """强制设置 Word 中文显示字体"""
+    run.font.name = font_name
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)  # 关键：设置东亚字体
+    run.font.size = Pt(size)
+    run.font.color.rgb = color
 ```
 
-### 方案二：集成到报表生成脚本（完整版 - 111.txt）
+**使用示例：**
+```python
+# 设置标题字体（黑体，14 号）
+doc.add_heading(f"监控总览（近{time_dimension}）", level=1)
+for run in doc.paragraphs[-1].runs:
+    set_chinese_font(run, "黑体", 14)
 
-你提供的脚本包含了完整的恶意链接检测功能，集成在报表生成流程中：
+# 设置表格字体（宋体，10 号）
+run = row_cells[0].paragraphs[0].add_run(cell_val)
+set_chinese_font(run, "宋体", 10)
 
-**检测逻辑：**
+# 设置错误提示字体（红色）
+set_chinese_font(para.runs[0], "宋体", 11, RGBColor(220, 20, 60))
+```
+
+**3. 核心统计信息表格化**
+
+```python
+def add_core_stats_table(doc, stats):
+    """添加核心统计信息表格（替代文本展示）"""
+    doc.add_heading("核心统计信息", level=3)
+    for run in doc.paragraphs[-1].runs:
+        set_chinese_font(run, "黑体", 12)
+    
+    # 创建 2 列 4 行的统计表格
+    table = doc.add_table(rows=4, cols=2)
+    table.style = "Table Grid"
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.width = Inches(6)  # 固定表格宽度
+    
+    # 表格内容
+    stats_data = [
+        ["总检测次数", f"{stats['总检测次数']} 次"],
+        ["在线次数", f"{stats['在线次数']} 次"],
+        ["离线次数", f"{stats['离线次数']} 次"],
+        ["可用性", stats['可用性']]
+    ]
+    
+    # 填充表格并设置字体
+    for i in range(4):
+        row_cells = table.rows[i].cells
+        run1 = row_cells[0].paragraphs[0].add_run(stats_data[i][0])
+        set_chinese_font(run1, "黑体", 10)  # 指标名称用黑体
+        run2 = row_cells[1].paragraphs[0].add_run(stats_data[i][1])
+        set_chinese_font(run2, "宋体", 10)  # 指标值用宋体
+```
+
+**4. 报表结构**
+
+```
+监控总报表_近 30 天_20260311_172200.docx
+├── 报表标题（黑体，20 号，居中）
+├── 生成时间（宋体，12 号，居中）
+├── 监控总览表（所有监控项汇总）
+├── 各监控项详细章节
+│   ├── 监控项名称（黑体，13 号）
+│   ├── 核心统计信息表格
+│   ├── 可视化图表
+│   └── 最近 10 次监控摘要
+└── 恶意链接检测章节（最底部）
+```
+
+---
+
+## 恶意链接检测功能
+
+### 检测逻辑
 
 ```python
 def check_malicious_links() -> dict:
@@ -570,408 +407,272 @@ def check_malicious_links() -> dict:
     soup = BeautifulSoup(resp.text, "html.parser")
     
     # 2. 提取所有有效链接（去重）
+    base_url = f"{urlparse(TARGET_URL).scheme}://{urlparse(TARGET_URL).netloc}"
     all_links = set()
     for a in soup.find_all("a", href=True):
-        full_url = urljoin(base_url, a["href"])
+        href = a["href"]
+        if not href or href.startswith("#") or href.startswith("javascript:"):
+            continue
+        full_url = urljoin(base_url, href)
         if full_url.startswith(("http://", "https://")):
             all_links.add(full_url)
     
     # 3. 随机选择 50 个链接检测
+    link_list = list(all_links)
     random.shuffle(link_list)
     target_links = link_list[:MAX_LINK_COUNT]
     
     # 4. 检测规则
-    phishing_keywords = ["login", "signin", "verify", "secure", "bank", "pay"]
-    suspicious_suffixes = [".xyz", ".top", ".work", ".click", ".tk", ".ml"]
-    malicious_domains = {"evil.com", "malicious.com"}
+    phishing_keywords = ["login", "signin", "verify", "secure", "bank", "pay", 
+                         "wallet", "account", "update", "auth"]
+    suspicious_suffixes = [".xyz", ".top", ".work", ".click", ".gq", 
+                          ".tk", ".ml", ".cf", ".ga"]
+    malicious_domains = {"evil.com", "malicious.com", "phish.com", "hack.com"}
     
     for link in target_links:
+        parsed = urlparse(link)
+        is_suspicious = False
+        is_phishing = False
+        
         # 检测钓鱼关键词
+        link_lower = link.lower()
+        for keyword in phishing_keywords:
+            if keyword in link_lower:
+                is_phishing = True
+                break
+        
         # 检测可疑域名后缀
-        # 检测恶意域名黑名单
+        if any(parsed.netloc.endswith(suffix) for suffix in suspicious_suffixes):
+            is_suspicious = True
+        
+        # 检测恶意域名
+        if parsed.netloc in malicious_domains:
+            is_suspicious = True
+        
         # 检测异常字符/超长 URL
+        if len(link) > 200 or re.search(r"[^\w\./:_-]", link):
+            is_suspicious = True
+        
+        # 分类统计
+        if is_phishing:
+            result["phishing_links"].append(link)
+        elif is_suspicious:
+            result["suspicious_links"].append(link)
+        else:
+            result["safe_links"] += 1
 ```
 
-**生成饼状图可视化：**
+### 生成饼状图可视化
 
 ```python
 def generate_malicious_detection_chart(detection_result):
-    """生成恶意链接检测饼状图"""
-    labels = ["安全链接", "可疑链接", "钓鱼链接"]
+    """生成恶意链接检测饼状图（中文标签）"""
+    safe = detection_result["safe_links"]
+    suspicious = len(detection_result["suspicious_links"])
+    phishing = len(detection_result["phishing_links"])
+    
+    labels = ["安全链接", "可疑链接", "钓鱼链接"]  # 中文标签
     sizes = [safe, suspicious, phishing]
     colors = ["#32CD32", "#FFD700", "#DC143C"]
     
+    # 生成饼图（中文标题）
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(sizes, labels=labels, autopct="%1.1f%%", colors=colors)
-    ax.set_title(f"BJLOT 恶意链接检测结果（随机{MAX_LINK_COUNT}个链接）")
+    ax.pie(sizes, labels=labels, autopct="%1.1f%%", colors=colors, startangle=90)
+    ax.set_title(f"BJLOT 恶意链接检测结果（随机{MAX_LINK_COUNT}个链接）", fontsize=12)
+    
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    buf.seek(0)
+    plt.close(fig)
+    return [("恶意链接检测饼状图", buf)]
 ```
 
-**集成到 Word 报表：**
+### 添加到 Word 报表
 
 ```python
 def add_malicious_detection_section(doc, detection_result):
     """添加恶意链接检测章节到报表"""
+    # 章节标题
     doc.add_heading("BJLOT Malicious Link Detection Report", level=2)
+    for run in doc.paragraphs[-1].runs:
+        set_chinese_font(run, "黑体", 13)
     
     # 显示检测基本信息
+    basic_info = doc.add_paragraph()
+    basic_info.add_run(f"目标网址：{TARGET_URL}\n")
+    basic_info.add_run(f"总链接数：{detection_result['total_links_crawled']}\n")
+    basic_info.add_run(f"随机检测链接数：{detection_result['random_links_count']}\n")
+    set_chinese_font(basic_info.runs[0], "宋体", 11)
+    
     # 显示安全状态提示
-    # 显示异常链接列表
-    # 添加饼状图
-```
+    if not detection_result["suspicious_links"] and not detection_result["phishing_links"]:
+        safe_para = doc.add_paragraph("✅ 随机检测的链接中未发现可疑或钓鱼链接，所有链接均安全！")
+        set_chinese_font(safe_para.runs[0], "宋体", 11, RGBColor(0, 128, 0))
     
-    def check_url_structure(self, url):
-        """检查 URL 结构"""
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        
-        issues = []
-        
-        # 检查是否使用 HTTPS
-        if parsed.scheme != 'https':
-            issues.append("⚠️ 未使用 HTTPS 加密")
-        
-        # 检查域名长度（过长可能是钓鱼）
-        if len(hostname) > 50:
-            issues.append("⚠️ 域名过长，可能是钓鱼网站")
-        
-        # 检查是否包含 IP 地址
-        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', hostname):
-            issues.append("⚠️ 直接使用 IP 地址，不推荐")
-        
-        # 检查是否包含可疑关键词
-        for keyword in self.phishing_keywords:
-            if keyword in hostname.lower():
-                issues.append(f"⚠️ 域名包含可疑关键词：{keyword}")
-                break
-        
-        # 检查可疑顶级域名
-        for tld in self.suspicious_tlds:
-            if hostname.endswith(tld):
-                issues.append(f"⚠️ 使用可疑顶级域名：{tld}")
-                break
-        
-        return issues
-    
-    def check_ssl_certificate(self, url):
-        """检查 SSL 证书"""
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        
-        if parsed.scheme != 'https':
-            return ["⚠️ 未使用 HTTPS，无法检查 SSL 证书"]
-        
-        issues = []
-        
-        try:
-            # 获取 SSL 证书信息
-            context = ssl.create_default_context()
-            with socket.create_connection((hostname, 443), timeout=5) as sock:
-                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    cert = ssock.getpeercert()
-                    
-                    # 检查证书有效期
-                    not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
-                    days_remaining = (not_after - datetime.now()).days
-                    
-                    if days_remaining < 30:
-                        issues.append(f"⚠️ SSL 证书即将过期（剩余{days_remaining}天）")
-                    elif days_remaining < 0:
-                        issues.append("❌ SSL 证书已过期")
-                    
-                    # 检查证书颁发机构
-                    issuer = dict(x[0] for x in cert['issuer'])
-                    if 'Let\'s Encrypt' in str(issuer):
-                        pass  # Let's Encrypt 是合法的
-                    elif not issuer:
-                        issues.append("⚠️ 自签名证书，存在风险")
-        
-        except Exception as e:
-            issues.append(f"❌ SSL 证书检查失败：{str(e)}")
-        
-        return issues
-    
-    def check_domain_age(self, url):
-        """检查域名注册时长"""
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        
-        # 移除 www.前缀
-        if hostname.startswith('www.'):
-            hostname = hostname[4:]
-        
-        try:
-            w = whois.whois(hostname)
-            creation_date = w.creation_date
-            
-            # whois 返回的可能是列表
-            if isinstance(creation_date, list):
-                creation_date = creation_date[0]
-            
-            if creation_date:
-                age_days = (datetime.now() - creation_date).days
-                
-                if age_days < 30:
-                    return [f"⚠️ 域名注册时间很短（{age_days}天），可能是新注册的恶意域名"]
-                elif age_days < 90:
-                    return [f"⚠️ 域名较新（{age_days}天），需保持警惕"]
-        except Exception as e:
-            return [f"ℹ️ 无法查询域名注册信息：{str(e)}"]
-        
-        return []
-    
-    def check_redirect(self, url):
-        """检查 URL 重定向"""
-        import requests
-        
-        try:
-            response = requests.get(url, timeout=10, allow_redirects=False)
-            
-            if response.status_code in [301, 302, 307, 308]:
-                redirect_url = response.headers.get('Location', '')
-                return [f"⚠️ 存在重定向：{redirect_url}"]
-        except Exception as e:
-            return [f"❌ 重定向检查失败：{str(e)}"]
-        
-        return []
-    
-    def analyze(self, url):
-        """综合分析 URL"""
-        print(f"\n🔍 分析 URL: {url}")
-        print("=" * 60)
-        
-        all_issues = []
-        
-        # 1. 检查 URL 结构
-        print("\n📋 检查 URL 结构...")
-        issues = self.check_url_structure(url)
-        all_issues.extend(issues)
-        for issue in issues:
-            print(f"  {issue}")
-        if not issues:
-            print("  ✅ URL 结构正常")
-        
-        # 2. 检查 SSL 证书
-        print("\n🔒 检查 SSL 证书...")
-        issues = self.check_ssl_certificate(url)
-        all_issues.extend(issues)
-        for issue in issues:
-            print(f"  {issue}")
-        if not issues:
-            print("  ✅ SSL 证书正常")
-        
-        # 3. 检查域名注册时长
-        print("\n📅 检查域名注册时长...")
-        issues = self.check_domain_age(url)
-        all_issues.extend(issues)
-        for issue in issues:
-            print(f"  {issue}")
-        if not issues:
-            print("  ✅ 域名注册时长正常")
-        
-        # 4. 检查重定向
-        print("\n🔄 检查重定向...")
-        issues = self.check_redirect(url)
-        all_issues.extend(issues)
-        for issue in issues:
-            print(f"  {issue}")
-        if not issues:
-            print("  ✅ 无重定向")
-        
-        # 综合评估
-        print("\n" + "=" * 60)
-        if len(all_issues) == 0:
-            print("✅ 综合评估：安全")
-        elif len(all_issues) <= 2:
-            print("⚠️ 综合评估：低风险（发现少量问题）")
-        else:
-            print("❌ 综合评估：高风险（发现多个问题）")
-        
-        print(f"\n共发现 {len(all_issues)} 个问题：")
-        for issue in all_issues:
-            print(f"  - {issue}")
-        
-        return {
-            "url": url,
-            "issues": all_issues,
-            "risk_level": "安全" if len(all_issues) == 0 else "低风险" if len(all_issues) <= 2 else "高风险"
-        }
-
-
-def main():
-    """主函数"""
-    detector = MaliciousLinkDetector()
-    
-    # 示例：检测北京体彩网
-    urls = [
-        "https://www.bjlot.com.cn",
-        # 可以添加更多需要检测的 URL
-    ]
-    
-    results = []
-    for url in urls:
-        result = detector.analyze(url)
-        results.append(result)
-    
-    # 导出结果
-    output_file = f"malicious_link_check_{datetime.now().strftime('%Y%m%d')}.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    
-    print(f"\n💾 检测结果已导出至：{output_file}")
-
-
-if __name__ == "__main__":
-    main()
-```
-
-### 安装依赖
-
-```bash
-# 基础版依赖
-pip install requests python-whois
-
-# 完整版依赖（111.txt 脚本）
-pip install requests beautifulsoup4 python-docx matplotlib pandas
-```
-
-### 使用方法
-
-```bash
-# 运行基础版恶意链接检测
-python3 malicious_link_detector.py
-
-# 运行完整版报表生成（含恶意链接检测）
-python3 111.txt 30 天
+    # 强制添加饼状图
+    doc.add_heading("检测结果可视化", level=3)
+    charts = generate_malicious_detection_chart(detection_result)
+    for chart_title, chart_buf in charts:
+        chart_para = doc.add_paragraph(f"{chart_title}:")
+        set_chinese_font(chart_para.runs[0], "宋体", 10)
+        doc.add_picture(chart_buf, width=Inches(5))
 ```
 
 ---
 
-## 自动化月度巡检报告
+## 按监控类型生成定制图表
 
-### OpenClaw 定时任务配置
+### Matplotlib 中文支持配置
 
-在 OpenClaw 中创建 Skill，每月 1 号自动执行：
+```python
+import matplotlib.pyplot as plt
 
-```bash
-# Cron 表达式：每月 1 号 0 点执行
-0 0 1 * *
+# 修复 matplotlib 中文显示
+plt.rcParams["font.family"] = ["WenQuanYi Micro Hei", "WenQuanYi Zen Hei", 
+                               "AR PL UKai CN", "AR PL UMing CN"]
+plt.rcParams["axes.unicode_minus"] = False
 ```
 
-### 报告生成流程
+### 1. DNSv4/DNSv6 监控：解析状态折线图
 
-1. **读取数据**：直接读取 Uptime Kuma 的 SQLite 数据库
-2. **清洗统计**：
-   - 可用性百分比
-   - 平均响应时间
-   - 故障次数和时长
-   - SSL 证书状态
-3. **恶意链接检测**：对监控的 URL 进行安全风险评估
-4. **生成图表**：使用 Matplotlib 生成趋势图
-5. **填充模板**：按巡检报告模板生成 Word/PDF
-6. **发送报告**：通过邮件/钉钉/企业微信发送
+```python
+if "dnsv4" in monitor_name_lower or "dnsv6" in monitor_name_lower:
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(df["检测时间"], df["状态码"], color="#1E90FF", marker="o", markersize=2, linewidth=1.5)
+    ax.set_title(f"{monitor_name} - 解析状态趋势（近{time_dimension}）", fontsize=12)
+    ax.set_xlabel("检测时间", fontsize=10)
+    ax.set_ylabel("解析状态（1=成功，0=失败）", fontsize=10)
+    ax.set_ylim(-0.1, 1.1)
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels(["失败", "成功"])
+```
 
-### 报告模板示例
+### 2. HTTPS 监控：可用性面积图
 
-```markdown
-# 月度监控巡检报告
+```python
+elif "https" in monitor_name_lower:
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.fill_between(df["检测时间"], df["状态码"], color="#32CD32", alpha=0.6)
+    ax.plot(df["检测时间"], df["状态码"], color="#228B22", linewidth=1)
+    ax.set_title(f"{monitor_name} - HTTPS 可用性趋势（近{time_dimension}）", fontsize=12)
+    ax.set_xlabel("检测时间", fontsize=10)
+    ax.set_ylabel("服务状态（1=可用，0=不可用）", fontsize=10)
+```
 
-**报告周期**: 2026-02-01 ~ 2026-02-28
-**生成时间**: 2026-03-01 00:00:00
+### 3. PING/PORT 监控：双 Y 轴折线图
 
-## 监控概览
+```python
+elif "ping" in monitor_name_lower or "port" in monitor_name_lower:
+    fig, ax1 = plt.subplots(figsize=(10, 4))
+    
+    # 左 Y 轴：响应时间
+    color1 = "#FF6347"
+    ax1.set_xlabel("检测时间", fontsize=10)
+    ax1.set_ylabel("响应时间 (ms)", color=color1, fontsize=10)
+    ax1.plot(df["检测时间"], df["响应时间 (ms)"], color=color1, marker="o", markersize=2)
+    
+    # 右 Y 轴：连通状态
+    ax2 = ax1.twinx()
+    color2 = "#1E90FF"
+    ax2.set_ylabel("连通状态（1=通，0=不通）", color=color2, fontsize=10)
+    ax2.plot(df["检测时间"], df["状态码"], color=color2, marker="s", markersize=2)
+    ax2.set_ylim(-0.1, 1.1)
+    ax2.set_yticks([0, 1])
+    ax2.set_yticklabels(["不通", "通"])
+    
+    fig.suptitle(f"{monitor_name} - 响应时间&连通状态趋势（近{time_dimension}）", fontsize=12)
+```
 
-| 监控项 | 可用性 | 平均响应时间 | 故障次数 | 安全风险 |
-|--------|--------|-------------|----------|---------|
-| 北京体彩网 | 99.85% | 245ms | 3 | 安全 |
+### 4. Keyword 关键字监控：异常占比扇形图
 
-## 可用性趋势图
+```python
+elif "keyword" in monitor_name_lower or "关键字" in monitor_name_lower:
+    status_counts = df["状态"].value_counts()
+    labels = [f"{status}({count}次)" for status, count in status_counts.items()]
+    colors = ["#32CD32" if status == "在线" else "#DC143C" for status in status_counts.index]
+    
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(status_counts.values, labels=labels, autopct="%1.1f%%", colors=colors, startangle=90)
+    ax.set_title(f"{monitor_name} - 关键字监控异常占比（近{time_dimension}）", fontsize=12)
+```
 
-[插入 Matplotlib 趋势图]
+---
 
-## 故障详情
+## 依赖安装
 
-| 时间 | 故障时长 | 错误信息 |
-|------|---------|---------|
-| 2026-02-05 14:23 | 2 分钟 | Connection timeout |
+```bash
+# 基础依赖
+pip install requests beautifulsoup4 python-docx matplotlib pandas
 
-## SSL 证书状态
+# 安装中文字体（Linux）
+apt install fonts-wqy-microhei fonts-wqy-zenhei fonts-arphic-ukai fonts-arphic-uming
+```
 
-| 域名 | 过期时间 | 剩余天数 |
-|------|---------|---------|
-| www.bjlot.com.cn | 2026-12-15 | 289 |
+---
 
-## 恶意链接检测结果
+## 使用方法
 
-| 监控项 | URL | 风险等级 | 问题数量 |
-|--------|-----|---------|---------|
-| 北京体彩网 | https://www.bjlot.com.cn | 安全 | 0 |
+```bash
+# 交互式选择时间维度
+python3 111.txt
+
+# 命令行指定时间维度
+python3 111.txt 30 天
+python3 111.txt 7 天
+python3 111.txt 6 个月
+
+# OpenClaw 调用（JSON 参数）
+python3 111.txt '{"time_dimension":"30 天"}'
+```
+
+**输出示例：**
+```
+✅ 汇总总报表已生成：/root/.openclaw/reports/监控总报表_近 30 天_20260311_172200.docx
 ```
 
 ---
 
 ## 常见问题排查
 
-### 问题 1：3001 端口未监听
+### 问题 1：Word 中文显示为方框
 
-**症状**：`ss -tuln` 看不到 3001 端口
+**原因**：未正确设置东亚字体
 
-**排查步骤**：
-
-```bash
-# 1. 检查 PM2 进程状态
-pm2 status
-
-# 2. 查看日志定位错误
-pm2 logs uptime-kuma --lines 100
-
-# 3. 清理并重新启动
-pm2 stop uptime-kuma && pm2 delete uptime-kuma
-cd ~/uptime-kuma
-pm2 start server/server.js --name uptime-kuma
-
-# 4. 验证端口
-ss -tuln | grep 3001
+**解决方案**：
+```python
+# 必须使用 set_chinese_font 函数
+run._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")  # 关键！
 ```
 
-### 问题 2：Node.js 版本不足
+### 问题 2：Matplotlib 中文显示为方框
 
-```bash
-# 检查版本
-node -v
+**原因**：未配置中文字体
 
-# 升级 Node.js
-nvm install 20.4
-nvm use 20.4
-
-# 重新安装依赖
-cd ~/uptime-kuma
-rm -rf node_modules package-lock.json
-npm run setup
-pm2 restart uptime-kuma
+**解决方案**：
+```python
+plt.rcParams["font.family"] = ["WenQuanYi Micro Hei", "WenQuanYi Zen Hei"]
+plt.rcParams["axes.unicode_minus"] = False
 ```
 
 ### 问题 3：SQLite 数据库读取失败
 
 **可能原因**：
-
-1. 数据库路径错误 → 确认 `~/uptime-kuma/data/db.sqlite` 存在
+1. 数据库路径错误 → 确认 `/root/uptime-kuma/data/kuma.db` 存在
 2. 数据库被锁定 → 确保 Uptime Kuma 进程正常运行
-3. 权限不足 → 使用 `chmod 644 ~/uptime-kuma/data/db.sqlite`
+3. 权限不足 → 使用 `chmod 644 /root/uptime-kuma/data/kuma.db`
 
 **测试命令**：
-
 ```bash
 # 检查数据库文件
-ls -la ~/uptime-kuma/data/db.sqlite
+ls -la /root/uptime-kuma/data/kuma.db
 
 # 使用 sqlite3 命令行测试
-sqlite3 ~/uptime-kuma/data/db.sqlite "SELECT name FROM monitor LIMIT 5;"
+sqlite3 /root/uptime-kuma/data/kuma.db "SELECT name FROM monitor LIMIT 5;"
 ```
 
 ### 问题 4：云主机无法访问
 
 **检查清单**：
-
 - [ ] 阿里云安全组已放行 3001 端口（入方向，TCP）
 - [ ] 授权对象配置正确（本机 IP/32 或 0.0.0.0/0）
 - [ ] Uptime Kuma 进程正常运行（`pm2 status`）
@@ -986,6 +687,7 @@ sqlite3 ~/uptime-kuma/data/db.sqlite "SELECT name FROM monitor LIMIT 5;"
 - [PM2 官方文档](https://pm2.keymetrics.io/docs/usage/quick-start/)
 - [阿里云安全组配置](https://help.aliyun.com/document_detail/25471.html)
 - [OpenClaw 文档](https://docs.openclaw.ai)
+- [python-docx 文档](https://python-docx.readthedocs.io/)
 - [SQLite Python 文档](https://docs.python.org/zh-cn/3/library/sqlite3.html)
 
 ---
@@ -995,4 +697,5 @@ sqlite3 ~/uptime-kuma/data/db.sqlite "SELECT name FROM monitor LIMIT 5;"
 - **2026-03-11**: 初始版本，完整记录 Uptime Kuma 安装、配置及 OpenClaw 集成流程
   - 采用 SQLite 直接读取方式（非 API）
   - 增加恶意链接判断功能
-  - 完善月度巡检报告生成方案
+  - 完善 Word 报表生成（含中文字体设置）
+  - 按监控类型生成定制图表
