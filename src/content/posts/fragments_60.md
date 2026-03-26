@@ -6,9 +6,9 @@ description: '在Fuwari博客主题中，通过配置将默认社交图标替换
 slug: fuwari-custom-social-icons-line-md
 ---
 
-Fuwari 主题：使用 line-md 图标修改社交链接
+Fuwari 自定义社交图标（line-md）
 
-本指南适用于在 [Fuwari](https://github.com/saicaca/fuwari) 主题中，将默认的社交图标替换为 line-md 风格图标。
+在 [Fuwari](https://github.com/saicaca/fuwari) 主题中，将默认的社交图标替换为 line-md 风格图标。
 
 1. 查找并选择图标
 

@@ -1,12 +1,12 @@
 ---
-title: Ubuntu 系统安装 OpenClaw 完全指南
+title: Ubuntu 安装 OpenClaw 笔记
 pubDate: 2026-03-10
 categories: ['笔记']
-description: 'Ubuntu 系统下 OpenClaw 的完整安装流程，包括环境准备、OpenClaw 安装、大模型配置、飞书通道配置及 Skills 安装。'
+description: 'Ubuntu 系统下 OpenClaw 的安装流程，包括环境准备、安装步骤、模型配置、飞书通道配置及 Skills 安装。'
 slug: openclaw-ubuntu-install
 ---
 
-# Ubuntu 系统安装 OpenClaw 完全指南
+# Ubuntu 安装 OpenClaw 笔记
 
 本文档详细记录在 Ubuntu 系统上从零开始安装和配置 OpenClaw 的完整流程，涵盖环境准备、OpenClaw 安装、onboard 配置向导详解、飞书通道配置以及 Skills 安装。
 

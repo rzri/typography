@@ -1,12 +1,12 @@
 ---
-title: Uptime Kuma 监控与 OpenClaw 技能集成
+title: Uptime Kuma 监控集成 OpenClaw
 pubDate: 2026-03-11
 categories: ['笔记']
-description: '记录 Uptime Kuma 监控数据读取脚本开发全过程：从 API 限制到直接读库，从路径错误到格式确认，最终集成 OpenClaw 技能的完整经验。'
+description: '记录 Uptime Kuma 监控数据读取脚本开发过程：从 API 限制到直接读库，最终集成 OpenClaw 技能。'
 slug: uptime-kuma-deploy-openclaw-integration
 ---
 
-# Uptime Kuma 监控与 OpenClaw 技能集成实战
+# Uptime Kuma 监控集成 OpenClaw
 
 ##  核心目标
 
