@@ -1,12 +1,12 @@
 ---
-title: Nvidia API 接入 OpenClaw 笔记
+title: Nvidia API 接入 OpenClaw
 pubDate: 2026-03-26
 categories: ['笔记']
 description: '记录 Nvidia 免费 API 接入 OpenClaw 的流程：API Key 申请、模型配置，支持 Kimi K2.5、Qwen3.5、GLM-5 及 Llama 3.3 等模型。'
 slug: nvidia-api-integration-guide
 ---
 
-# Nvidia API 接入 OpenClaw 笔记
+# Nvidia API 接入 OpenClaw
 
 本文档详细记录如何将 Nvidia 免费 API 接入 OpenClaw，配置多款主流开源模型，实现零成本的 AI Agent 运行环境。
 
