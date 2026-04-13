@@ -1,6 +1,6 @@
 ---
 title: NewAPI 对接 OpenClaw
-pubDate: 2026-03-21
+pubDate: 2026-04-03
 categories: ['笔记']
 description: '记录一次 NewAPI(OpenAI 兼容接口) 对接 OpenClaw 时遇到 403 的排查过程：根因是 WAF/网关拦截特定 User-Agent，通过 providers.headers 覆盖 UA 即可恢复 200。'
 slug: newapi-openclaw-403-user-agent
