@@ -6,12 +6,12 @@ description: '记录一次 NewAPI(OpenAI 兼容接口) 对接 OpenClaw 时遇到
 slug: newapi-openclaw-403-user-agent
 ---
 
-## 背景与结论（先说人话）
+## 背景与结论
 
 现象：
 
 - OpenClaw 通过某个 NewAPI（OpenAI 兼容）站点请求模型时返回 **403**
-- 乍一看像“模型不可用 / Key 不对 / 没权限”
+- 表面看像“模型不可用 / Key 不对 / 没权限”
 
 结论（根因）：
 
@@ -20,7 +20,7 @@ slug: newapi-openclaw-403-user-agent
 - 高概率触发点：`User-Agent: OpenAI/JS 6.26.0`
 - 同样请求内容，换一个 `User-Agent` 可能立刻变 **200**
 
-> 这类问题的特点是：你怎么换模型都 403，但你一改 UA 就通。
+> 这类问题的特点是：换模型仍然 403，但修改 UA 后立刻恢复。
 
 ---
 
@@ -115,7 +115,7 @@ slug: newapi-openclaw-403-user-agent
 }
 ```
 
-### 2.2 为什么这招有效
+### 2.2 为什么这个方法有效
 
 如果 provider/WAF 针对某些 UA 做了策略（拦截、挑战、降权），那就会出现：
 
@@ -186,6 +186,7 @@ curl http://localhost:18789/v1/chat/completions \
 - 遇到“同样请求内容一直 403”的情况：
   - 优先怀疑 WAF/网关策略
   - 先从 `User-Agent` 下手（成本最低、回滚最容易）
+
 
 ## 6. 脱敏规范（强制）
 
