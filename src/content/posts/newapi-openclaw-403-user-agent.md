@@ -178,27 +178,3 @@ curl http://localhost:18789/v1/chat/completions \
 ```
 
 ---
-
-## 5. 经验总结（写给未来的自己）
-
-- 403 不要先入为主：不一定是模型或 Key 的锅
-- 先用 curl 打通最短链路：本机 → Gateway → provider
-- 遇到“同样请求内容一直 403”的情况：
-  - 优先怀疑 WAF/网关策略
-  - 先从 `User-Agent` 下手（成本最低、回滚最容易）
-
-
-## 6. 脱敏规范（强制）
-
-这类笔记/截图/日志对外分享前，必须隐藏：
-
-- baseUrl 真实域名
-- `apiKey`、`token`、`appSecret` 等任何密钥
-- 能定位到你个人环境的唯一标识
-
-统一替换成：
-
-- `https://YOUR_NEWAPI_DOMAIN/v1`
-- `YOUR_NEWAPI_API_KEY`
-- `YOUR_GATEWAY_TOKEN`
-- `***REDACTED***`
