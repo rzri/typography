@@ -169,7 +169,7 @@ curl http://localhost:18789/v1/chat/completions \
 
 ## 4. 可选：更像浏览器的 User-Agent
 
-如果 `OpenClaw/2026.3` 仍被拦，可以试更“浏览器化”的 UA（同样不需要泄露任何敏感信息）：
+如果 `OpenClaw/2026.3` 仍被拦，可以试更“浏览器化”的 UA：
 
 ```json
 "headers": {
