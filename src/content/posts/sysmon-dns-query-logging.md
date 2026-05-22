@@ -1,7 +1,7 @@
 ---
 title: 使用 Sysmon 监控 DNS 查询定位恶意域名访问进程
 pubDate: 2026-05-22
-categories: ['安全运维']
+categories: ['笔记']
 description: '通过安装配置 Sysmon 开启 DNS 查询日志（事件 ID 22），在 Windows 事件查看器中定位频繁外联恶意域名的进程。'
 slug: sysmon-dns-query-logging
 ---
