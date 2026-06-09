@@ -16,7 +16,7 @@ slug: zabbix-wechat-alert-daemon
 
 | 项目 | 内容 |
 |------|------|
-| **服务器** | `192.168.23.22` (bjlotzabbix) |
+| **服务器** | `192.168.23.22` |
 | **操作系统** | Ubuntu Server，内核 6.8.0-85-generic |
 | **服务名** | `wechat-alert.service` (systemd 守护进程) |
 | **脚本路径** | `/opt/alert/wechat.py` |
@@ -48,12 +48,9 @@ slug: zabbix-wechat-alert-daemon
 | **异常自检** | 连续 3 次失败触发「自检告警」通知管理员（冷却 5 分钟） |
 | **自动恢复** | systemd `Restart=always`，进程崩溃自动拉起 |
 
-### 2.2 去重策略演进
+### 2.2 去重策略
 
-| 版本 | 文件 | 去重方式 | 特点 |
-|------|------|----------|------|
-| **旧版** | `repeat-wechat.py` | 内存 `set` + 30 分钟时间窗口 | 基于 status+时间过滤，防止刷屏 |
-| **当前版** | `wechat.py` | 内存记录最大 `alertid` | 递增进度，永不回退，更简洁 |
+基于 `alertid` 的增量进度标记：内存中记录已处理的最大 ID，查询时只取 `alertid > last_processed_id` 的新增数据。发送成功才推进标记，失败则保持不动，下一轮自动重试。
 
 ## 三、部署配置
 
@@ -99,11 +96,9 @@ systemctl stop wechat-alert.service
 systemctl enable wechat-alert.service
 ```
 
-## 四、完整脚本代码
+## 四、脚本代码
 
-### 4.1 当前运行版 — `wechat.py`
-
-从基于 status 的时间窗口过滤改为基于 `alertid` 的增量进度标记，更简洁可靠。
+基于 `alertid` 增量进度标记，不依赖 `status` 字段，适配网闸同步场景。
 
 ```python
 #!/usr/bin/env python3
@@ -347,234 +342,18 @@ if __name__ == '__main__':
         time.sleep(CHECK_INTERVAL)
 ```
 
-### 4.2 旧版 — `repeat-wechat.py`（保留参考）
+## 五、运维参考
 
-使用 `status IN (0,1)` + 30 分钟时间窗口 + 内存 set 去重。当前已不运行，但其基于 status 过滤的思路在某些场景仍有参考价值。
-
-```python
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-微信告警守护进程（只读模式 + 内存防重复）
-- 不创建表、不更新任何数据
-- 使用内存 set 记录已发送 alertid
-- 仅处理最近 30 分钟内的告警（避免历史刷屏）
-- 兼容 Dummy 媒介（status=1）
-"""
-
-import time
-import json
-import urllib.request
-import urllib.error
-import pymysql
-import sys
-
-# ================== 配置区 ==================
-CORPID = 'YOUR_CORPID'
-CORPSECRET = 'YOUR_CORPSECRET'
-AGENTID = '8'
-TOUSER = "YOUR_PHONE"
-TOPARTY = "6"
-
-DB_CONFIG = {
-    'host': 'YOUR_DB_HOST',
-    'port': 3306,
-    'user': 'zabbix',
-    'password': 'YOUR_DB_PASSWORD',
-    'database': 'zabbix',
-    'charset': 'utf8mb4',
-    'connect_timeout': 10,
-    'read_timeout': 10
-}
-
-CHECK_INTERVAL = 10
-SELF_ALERT_THRESHOLD = 3
-SELF_ALERT_COOLDOWN = 300
-
-# ================== 全局状态 ==================
-db_fail_count = 0
-token_fail_count = 0
-last_self_alert_time = 0
-
-SENT_ALERT_IDS = set()
-RECENT_WINDOW = 1800  # 30 分钟
-
-# ================== 工具函数 ==================
-
-def log(msg):
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] {msg}", flush=True)
-
-def send_wechat_message_raw(token, subject, message):
-    url = f'https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}'
-    payload = {
-        "touser": TOUSER,
-        "toparty": TOPARTY,
-        "msgtype": "text",
-        "agentid": int(AGENTID),
-        "text": {"content": f"{subject}\n{message}"},
-        "safe": 0
-    }
-    try:
-        data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
-            return result.get('errcode') == 0
-    except Exception as e:
-        log(f"⚠️ 微信发送异常: {e}")
-        return False
-
-def get_token_for_self_alert():
-    url = f'https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORPID}&corpsecret={CORPSECRET}'
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            if data.get('errcode') == 0:
-                return data['access_token']
-    except Exception:
-        pass
-    return None
-
-def send_self_alert(reason):
-    global last_self_alert_time
-    now = time.time()
-    if now - last_self_alert_time < SELF_ALERT_COOLDOWN:
-        return
-    token = get_token_for_self_alert()
-    if not token:
-        return
-    subject = "【系统告警】微信告警代理异常"
-    message = (
-        f"主机: bjlotzabbix\n"
-        f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"原因: {reason}\n"
-        f"请立即检查服务状态！"
-    )
-    if send_wechat_message_raw(token, subject, message):
-        last_self_alert_time = now
-
-# ================== 核心逻辑 ==================
-
-def get_wechat_token():
-    global token_fail_count
-    url = f'https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORPID}&corpsecret={CORPSECRET}'
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            if data.get('errcode') == 0:
-                token_fail_count = 0
-                return data['access_token']
-    except Exception:
-        pass
-    token_fail_count += 1
-    if token_fail_count >= SELF_ALERT_THRESHOLD:
-        send_self_alert(f"连续 {token_fail_count} 次无法获取企业微信 token")
-    return None
-
-def process_alerts():
-    global db_fail_count, SENT_ALERT_IDS
-    conn = None
-    cursor = None
-    try:
-        conn = pymysql.connect(**DB_CONFIG)
-        cursor = conn.cursor(pymysql.cursors.DictCursor)
-        db_fail_count = 0
-
-        min_clock = int(time.time()) - RECENT_WINDOW
-        cursor.execute("""
-            SELECT alertid, subject, message
-            FROM alerts
-            WHERE status IN (0, 1)
-              AND clock >= %s
-            ORDER BY clock ASC
-            LIMIT 20
-        """, (min_clock,))
-        alerts = cursor.fetchall()
-
-        if not alerts:
-            return
-
-        new_alerts = [a for a in alerts if a['alertid'] not in SENT_ALERT_IDS]
-        if not new_alerts:
-            return
-
-        log(f"📬 发现 {len(new_alerts)} 条待处理告警")
-        token = get_wechat_token()
-        if not token:
-            return
-
-        success_count = 0
-        for alert in new_alerts:
-            alert_id = alert['alertid']
-            subject = (alert['subject'] or '[无标题]').strip()
-            message = (alert['message'] or '[无内容]').strip()
-            log(f"📤 发送告警 ID={alert_id}: {subject}")
-            if send_wechat_message_raw(token, subject, message):
-                SENT_ALERT_IDS.add(alert_id)
-                success_count += 1
-            else:
-                log(f"❌ 告警 ID={alert_id} 发送失败")
-        log(f"📊 本次处理: 成功 {success_count}/{len(new_alerts)}")
-
-    except (pymysql.Error, OSError) as e:
-        log(f"💥 数据库错误: {e}")
-        db_fail_count += 1
-        if db_fail_count >= SELF_ALERT_THRESHOLD:
-            send_self_alert(f"连续 {db_fail_count} 次无法连接数据库 {DB_CONFIG['host']}")
-    except Exception as e:
-        log(f"💥 未知异常: {e}")
-        send_self_alert(f"主循环发生未预期异常：{str(e)[:100]}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-# ================== 主循环 ==================
-if __name__ == '__main__':
-    log("🚀 微信告警守护进程（只读防重复版）启动...")
-    log(f"📡 监控数据库: {DB_CONFIG['host']}")
-    log(f"⏱️ 轮询间隔: {CHECK_INTERVAL} 秒")
-    log(f"⏰ 仅处理最近 {RECENT_WINDOW // 60} 分钟内的告警")
-
-    while True:
-        try:
-            process_alerts()
-        except KeyboardInterrupt:
-            log("🛑 收到中断信号，退出...")
-            sys.exit(0)
-        except Exception as e:
-            log(f"🔥 主循环崩溃: {e}")
-            send_self_alert(f"主循环崩溃：{str(e)[:100]}")
-        finally:
-            time.sleep(CHECK_INTERVAL)
-```
-
-## 五、当前版本 vs 旧版对比
-
-| 对比维度 | 当前版 `wechat.py` | 旧版 `repeat-wechat.py` |
-|----------|-------------------|------------------------|
-| **去重方式** | 内存 `last_processed_id` 增量推进 | 内存 `set` + 30 分钟窗口 |
-| **SQL 条件** | `alertid > last_processed_id` | `status IN (0,1) AND clock >= 最近30分钟` |
-| **失败重试** | ✅ 发送失败保留 ID，下次重试 | ❌ 失败不记录，下次可能跳过 |
-| **依赖 status** | ❌ 不依赖（适配网闸） | ✅ 依赖 status 字段 |
-| **启动初始化** | 自动同步到当前最大 alertid | 无初始化，直接查最近 30 分钟 |
-| **可靠性** | 更高（永不丢数据） | 中等（30 分钟窗口可能遗漏） |
-
-## 六、运维参考
-
-### 6.1 文件清单
+### 5.1 文件清单
 
 | 路径 | 说明 |
 |------|------|
 | `/opt/alert/wechat.py` | 当前运行的主脚本 |
 | `/opt/alert/wechat.py.bak` | 备份（2026-02-28） |
-| `/opt/alert/repeat-wechat.py` | 旧版本留底 |
 | `/opt/alert/venv/` | Python 虚拟环境（含 pymysql） |
 | `/etc/systemd/system/wechat-alert.service` | systemd 服务单元 |
 
-### 6.2 依赖
+### 5.2 依赖
 
 ```bash
 # Python 依赖（通过 venv 管理）
@@ -586,7 +365,7 @@ pip install pymysql
 # - urllib（标准库，调用企业微信 API）
 ```
 
-### 6.3 企业微信 API
+### 5.3 企业微信 API
 
 | 接口 | 用途 |
 |------|------|
