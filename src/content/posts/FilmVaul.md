@@ -50,9 +50,6 @@ Film Vault 是一个个人长期使用的**影视墙**项目。
 
 ### 2.1 目录说明
 
-<details>
-<summary>展开查看目录结构</summary>
-
 ```text
 .
 ├─ .github/
@@ -81,7 +78,6 @@ Film Vault 是一个个人长期使用的**影视墙**项目。
 └─ FilmVault-博客版部署笔记.md         # 这份详细笔记
 ```
 
-</details>
 
 ---
 
@@ -116,15 +112,11 @@ Film Vault 是一个个人长期使用的**影视墙**项目。
 
 ### 4.1 克隆仓库
 
-<details>
-<summary>展开查看命令</summary>
-
 ```bash
 git clone https://github.com/haenlau/films.git
 cd films
 ```
 
-</details>
 
 ### 4.2 Node.js 版本
 
@@ -166,19 +158,12 @@ cd films
 
 复制模板：
 
-<details>
-<summary>展开查看命令</summary>
-
 ```bash
 copy admin.local.example.js admin.local.js
 ```
 
-</details>
 
 #### 步骤二：填写本地配置
-
-<details>
-<summary>展开查看 admin.local.js 示例</summary>
 
 ```js
 window.FILM_VAULT_ADMIN = {
@@ -187,7 +172,6 @@ window.FILM_VAULT_ADMIN = {
 };
 ```
 
-</details>
 
 注意：
 
@@ -215,9 +199,6 @@ window.FILM_VAULT_ADMIN = {
 
 推荐结构：
 
-<details>
-<summary>展开查看示例</summary>
-
 ```json
 {
   "title": "我的影视墙",
@@ -240,7 +221,6 @@ window.FILM_VAULT_ADMIN = {
 }
 ```
 
-</details>
 
 字段说明：
 
@@ -282,9 +262,6 @@ window.FILM_VAULT_ADMIN = {
 
 格式示例：
 
-<details>
-<summary>展开查看格式</summary>
-
 ```js
 window.__FILM_VAULT_SOURCE__ = {
   "title": "我的影视墙",
@@ -299,7 +276,6 @@ window.__FILM_VAULT_RESOLVED__ = {
 };
 ```
 
-</details>
 
 ---
 
@@ -313,41 +289,26 @@ window.__FILM_VAULT_RESOLVED__ = {
 
 内容示例：
 
-<details>
-<summary>展开查看示例</summary>
-
 ```env
 TMDB_API_KEY=YOUR_TMDB_API_KEY
 ```
 
-</details>
 
 ### 7.2 按名称搜索并添加影视
-
-<details>
-<summary>展开查看命令</summary>
 
 ```bash
 npm run add:movie -- 怪奇物语
 ```
 
-</details>
 
 ### 7.3 根据源片单重建完整片库
-
-<details>
-<summary>展开查看命令</summary>
 
 ```bash
 npm run rebuild:library
 ```
 
-</details>
 
 ### 7.4 `package.json` 中的脚本
-
-<details>
-<summary>展开查看 package.json</summary>
 
 ```json
 {
@@ -361,7 +322,6 @@ npm run rebuild:library
 }
 ```
 
-</details>
 
 ---
 
@@ -432,9 +392,6 @@ npm run rebuild:library
 
 ### 9.3 关键实现思路
 
-<details>
-<summary>展开查看前端搜索分页关键代码</summary>
-
 ```js
 state.searchQuery = query;
 state.searchPage = 1;
@@ -450,10 +407,6 @@ renderSearchResults();
 renderSearchPagination();
 ```
 
-</details>
-
-<details>
-<summary>展开查看 Worker 搜索分页关键代码</summary>
 
 ```js
 const page = Math.max(1, Number(body.page || 1));
@@ -471,7 +424,6 @@ return json({
 });
 ```
 
-</details>
 
 ---
 
@@ -501,9 +453,6 @@ return json({
 
 ### 10.3 `wrangler.example.toml`
 
-<details>
-<summary>展开查看配置模板</summary>
-
 ```toml
 name = "films"
 compatibility_date = "2026-04-23"
@@ -516,7 +465,6 @@ id = "replace-with-your-kv-namespace-id"
 preview_id = "replace-with-your-preview-kv-namespace-id"
 ```
 
-</details>
 
 ### 10.4 必要的 KV 配置
 
@@ -613,30 +561,19 @@ preview_id = "replace-with-your-preview-kv-namespace-id"
 
 ### 13.1 进入仓库目录
 
-<details>
-<summary>展开查看命令</summary>
-
 ```bash
 cd C:\Users\haenl\Documents\Codex\2026-04-23-d-1a-web-films-web-tmdb
 ```
 
-</details>
 
 ### 13.2 查看状态
-
-<details>
-<summary>展开查看命令</summary>
 
 ```bash
 git status
 ```
 
-</details>
 
 ### 13.3 提交全部改动
-
-<details>
-<summary>展开查看命令</summary>
 
 ```bash
 git add .
@@ -644,12 +581,8 @@ git commit -m "your commit message"
 git push
 ```
 
-</details>
 
 ### 13.4 只提交部分文件
-
-<details>
-<summary>展开查看命令</summary>
 
 ```bash
 git add app.js _worker.js index.html styles.css README.md
@@ -657,7 +590,6 @@ git commit -m "your commit message"
 git push
 ```
 
-</details>
 
 ---
 
