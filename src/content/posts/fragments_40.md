@@ -3,7 +3,7 @@ title: Workers + KV + WebDAV 搭一个临时文件中转站
 pubDate: 2025-10-17
 updatedDate: 2025-06-11
 categories: ['笔记']
-description: '用 Cloudflare Workers + KV 做临时文件中转：单文件最大 99MB，多文件自动打包 ZIP（上限 50MB），7 天自动销毁，支持企业微信通知。'
+description: '用 Cloudflare Workers + KV 做临时文件中转：单文件最大 99MB，多文件自动打包 ZIP（总上限 99MB），7 天自动销毁，支持企业微信通知。'
 slug: workers-kv-webdav-tempfile
 ---
 
@@ -11,7 +11,7 @@ slug: workers-kv-webdav-tempfile
 
 我手上刚好有一份闲置的 WebDAV 云盘空间（服务在日本，之前一直吃灰）。于是干脆借 Cloudflare Workers + KV 做个"临时文件中转站"：
 
-- 浏览器打开首页，拖拽或选择文件上传（单文件最大 99MB，多文件自动打包 ZIP 总上限 50MB）
+- 浏览器打开首页，拖拽或选择文件上传（单文件最大 99MB，多文件自动打包 ZIP 总上限 99MB）
 - 返回一个短链接，复制就能分享
 - 文件 7 天后自动销毁（由 KV TTL 控制）
 - 可选：上传成功后自动推送企业微信通知
@@ -85,7 +85,7 @@ const HTML = `<!DOCTYPE html>
  <meta charset="utf-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
  <title>✨ Air1 TempFile</title>
- <link rel="icon" type="image/png" href="https://YOUR_DOMAIN/favicon.png" />
+ <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI5MCIgZmlsbD0iIzYzNjZmMSIgc3Ryb2tlPSIjODExY2Y4IiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cGF0aCBkPSJNODAgODBDODAgNzUuNiA4My42IDcyIDg4IDcySDExMkMxMTYuNCA3MiAxMjAgNzUuNiAxMjAgODB2NDBDMTIwIDEyNC40IDExNi40IDEyOCAxMTIgMTI4SDg4QzgzLjYgMTI4IDgwIDEyNC40IDgwIDEyMFY4MFoiIGZpbGw9IndoaXRlIi8+CiAgPHBhdGggZD0iTTEwMCA5MFYxMDBIMTFWOTBIMTAweiIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjODExY2Y4IiBzdHJva2Utd2lkdGg9IjEuNSIvPgogIDxwYXRoIGQ9Ik0xMDAgMTExVjEyMEgxMVYxMTFIMTAweiIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjODExY2Y4IiBzdHJva2Utd2lkdGg9IjEuNSIvPgo8L3N2Zz4="/>
  <style>
  :root {
  --bg: #0f0f12;
@@ -635,18 +635,18 @@ const HTML = `<!DOCTYPE html>
 import { zipSync } from 'fflate';
 
 // ====== 常量 ======
-const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 多文件打包总上限 50MB
+const MAX_TOTAL_SIZE = 99 * 1024 * 1024; // 多文件打包总上限 99MB
 const EXPIRATION_TTL = 7 * 24 * 3600; // 7天
 
-// ====== 生成随机 6 位 ID ======
+// ====== 生成随机 ID ======
 async function generateFileId(env) {
  for (let i = 0; i < 5; i++) {
- const id = Math.random().toString(36).substring(2, 8).padStart(6, '0');
+ const id = Math.random().toString(36).substring(2, 8);
  if (!(await env.TEMP_STORE.get(id))) {
  return id;
  }
  }
- return (Math.random().toString(36).substring(2, 8) + Date.now().toString(36).slice(-2)).padStart(6, '0');
+ return Math.random().toString(36).substring(2, 8);
 }
 
 // ====== ZIP 打包（使用 fflate）======
@@ -944,7 +944,7 @@ export default {
 ## 第六步：验证功能
 
 - 首页访问：浏览器打开 `https://你的域名/`，应显示上传页面
-- 上传：选择文件点击上传（单文件最大 99MB，多文件打包 ZIP 总上限 50MB），返回下载链接
+- 上传：选择文件点击上传（单文件最大 99MB，多文件打包 ZIP 总上限 99MB），返回下载链接
 - 下载：打开下载链接，应以附件形式下载并保留原文件名
 - 企业微信：上传成功后应收到通知（如已配置 Webhook）
 
