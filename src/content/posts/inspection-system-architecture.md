@@ -172,26 +172,17 @@ SMB 共享配置：
 
 ## 服务管理
 
-```bash
-# 状态检查
-systemctl status inspection
-systemctl status nginx
-systemctl is-enabled inspection
-
-# 启停操作
-systemctl restart inspection
-systemctl stop inspection
-systemctl start inspection
-
-# 查看日志
-journalctl -u inspection -f          # 实时日志
-journalctl -u inspection -n 100      # 最近 100 行
-tail -f /var/log/nginx/access.log    # nginx 访问日志
-```
+| 操作类别 | 命令 | 说明 |
+|----------|------|------|
+| 状态检查 | `systemctl status inspection` | 检查后端服务状态 |
+| | `systemctl status nginx` | 检查 Nginx 状态 |
+| | `systemctl is-enabled inspection` | 检查是否开机自启 |
+| 启停操作 | `systemctl restart/stop/start inspection` | 重启/停止/启动后端 |
+| 查看日志 | `journalctl -u inspection -f` | 实时跟踪后端日志 |
+| | `journalctl -u inspection -n 100` | 查看最近 100 行 |
+| | `tail -f /var/log/nginx/access.log` | 实时跟踪 Nginx 日志 |
 
 ### Systemd 服务配置
-
-文件路径：`/etc/systemd/system/inspection.service`
 
 ```ini
 [Unit]
@@ -266,9 +257,6 @@ cd /opt/inspection/frontend && npm run build
 
 ### 一键部署脚本
 
-<details>
-<summary>点击展开 / deploy.sh 完整脚本</summary>
-
 ```bash
 #!/bin/bash
 SERVER="YOUR_SERVER_IP"
@@ -291,8 +279,6 @@ ssh $USER@$SERVER "systemctl status inspection --no-pager | head -5"
 
 echo "=== 部署完成 ==="
 ```
-
-</details>
 
 ## 巡检点配置修改
 
