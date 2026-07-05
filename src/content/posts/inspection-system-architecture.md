@@ -2,9 +2,11 @@
 title: 'B/S架构机房巡检系统技术文档'
 pubDate: 2026-06-23
 categories: ['运维']
-description: '基于FastAPI+Vue3的每日值班巡检系统，支持20个巡检点数据采集、图片压缩、Word报告生成和SMB共享归档。'
+description: '基于 FastAPI + Vue3 的每日值班巡检系统，支持 20 个巡检点数据采集、图片压缩、Word 报告生成及 SMB 共享归档。'
 slug: inspection-system-architecture
 ---
+
+> 本文中所有 `YOUR_xxx` 格式的占位符请替换为实际值。
 
 ## 系统概述
 
@@ -30,8 +32,8 @@ slug: inspection-system-architecture
 | 操作系统 | Ubuntu 26.04 LTS |
 | Python | 3.14.4 |
 | Node.js | 22.23.0 |
-| 内存 | 7.2GB |
-| 磁盘 | 62GB |
+| 内存 | 7.2 GB |
+| 磁盘 | 62 GB |
 | CPU | 4 核 |
 
 访问入口：
@@ -42,12 +44,12 @@ slug: inspection-system-architecture
 | API 文档 | `http://YOUR_SERVER_IP/api/docs` |
 | 健康检查 | `http://YOUR_SERVER_IP/api/health` |
 
-SMB 共享配置（需替换为你自己的相关信息）：
+SMB 共享配置：
 
 | 项目 | 值 |
 |------|-----|
 | 服务器 | `YOUR_SMB_SERVER` |
-| 共享名 | 共享 |
+| 共享名 | `YOUR_SHARE_NAME` |
 | 用户名 | `YOUR_DOMAIN\YOUR_USER` |
 | 密码 | `YOUR_PASSWORD` |
 
@@ -98,7 +100,7 @@ SMB 共享配置（需替换为你自己的相关信息）：
 | 4 | Zabbix | 状态+流量 | 运行正常 / 各设备流量正常 |
 | 5 | 主动威胁欺骗防御系统（谛听） | 状态+数值 | 无新增事件 |
 | 6 | 云工作负载保护平台（牧云） | 状态 | 无外部或明显恶意行为 |
-| 7 | 官网华为防火墙（6630E） | 状态 | 流量统计 10Mbps-60Mbps |
+| 7 | 官网华为防火墙（6630E） | 状态 | 流量统计 10 Mbps-60 Mbps |
 | 8 | 长亭 WEB 应用防火墙（雷池） | 状态+数值 | 无外部或明显恶意行为 |
 | 9 | 绿盟 WEB 应用防火墙（WAF） | 状态 | 无外部或明显恶意行为 |
 | 10 | 北单外网 TLS 防火墙（6625F） | 数值 | CT 和 CNC 均 0.8 Mbps 左右 |
@@ -117,11 +119,17 @@ SMB 共享配置（需替换为你自己的相关信息）：
 
 | 类型 | 说明 | 前端组件 |
 |------|------|----------|
-| status | 正常/异常单选 | Radio.Group |
-| numeric | 必填数值 | InputNumber |
-| numeric_optional | 选填数值 | InputNumber |
+| `status` | 正常/异常单选 | Radio.Group |
+| `numeric` | 必填数值 | InputNumber |
+| `numeric_optional` | 选填数值 | InputNumber |
 
-条件高亮规则：状态异常 → 整行红底；温湿度异常 → 整行黄底；CNC 数量 > 0 → 数值红字 + 二次确认。
+条件高亮规则：
+
+| 条件 | 效果 |
+|------|------|
+| 状态异常 | 整行红底 |
+| 温湿度异常（超出基线） | 整行黄底 |
+| CNC 数量 > 0 | 数值红字 + 二次确认弹窗 |
 
 ## API 接口
 
@@ -135,13 +143,13 @@ SMB 共享配置（需替换为你自己的相关信息）：
 | GET | `/api/report/{record_id}` | 下载报告 |
 | GET | `/api/inspection/records` | 获取巡检记录列表 |
 
-提交巡检请求体示例：
+### 提交巡检请求体示例
 
 ```json
 {
   "record_date": "2026-06-23",
   "shift": "morning",
-  "inspector_name": "张三",
+  "inspector_name": "YOUR_NAME",
   "points": {
     "p01_office_env": {"temp_status": "normal", "humidity_status": "normal"},
     "p02_office_fire": {"status": "normal"}
@@ -152,14 +160,22 @@ SMB 共享配置（需替换为你自己的相关信息）：
   "image_temp_paths": {
     "p01_office_env": ["/tmp/xxx/yyy.jpg"]
   },
-  "smb_path": "\\\\YOUR_SMB_SERVER\\共享\\团队\\方域\\刘晗",
+  "smb_path": "\\\\YOUR_SMB_SERVER\\YOUR_SHARE_NAME\\YOUR_NAME",
   "skip_smb": false
 }
 ```
 
-参数说明：`smb_path` 支持完整 UNC 路径或相对路径；`skip_smb` 为 true 时只生成报告不上传。
+参数说明：
+
+| 参数 | 说明 |
+|------|------|
+| `smb_path` | 支持完整 UNC 路径或相对路径 |
+| `skip_smb` | 为 `true` 时只生成报告，不上传 SMB |
 
 ## 服务管理
+
+<details>
+<summary>点击展开 / 服务管理命令</summary>
 
 ```bash
 # 状态检查
@@ -178,7 +194,11 @@ journalctl -u inspection -n 100      # 最近 100 行
 tail -f /var/log/nginx/access.log    # nginx 访问日志
 ```
 
-Systemd 服务配置 `/etc/systemd/system/inspection.service`：
+</details>
+
+### Systemd 服务配置
+
+文件路径：`/etc/systemd/system/inspection.service`
 
 ```ini
 [Unit]
@@ -216,11 +236,15 @@ systemctl start inspection
 
 ## 常见问题排查
 
+<details>
+<summary>点击展开 / 排查指南</summary>
+
 **服务无法启动：**
 
 ```bash
 journalctl -u inspection -n 50     # 查看详细错误
 lsof -i :8000                      # 检查端口占用
+# 手动启动测试（前台运行，观察报错）
 cd /opt/inspection/backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -246,28 +270,31 @@ df -h /                               # 检查磁盘空间
 **前端无法访问：**
 
 ```bash
-nginx -t                              # 检查配置
+nginx -t                              # 检查 Nginx 配置
 ls -la /opt/inspection/frontend/dist/ # 检查构建产物
-cd /opt/inspection/frontend && npm run build  # 重新构建
+# 重新构建前端
+cd /opt/inspection/frontend && npm run build
 ```
+
+</details>
 
 ## 部署流程
 
-后端更新：
+### 后端更新
 
 ```bash
 scp -r ./backend/* root@YOUR_SERVER_IP:/opt/inspection/backend/
 ssh root@YOUR_SERVER_IP "systemctl restart inspection"
 ```
 
-前端更新：
+### 前端更新
 
 ```bash
 scp -r ./frontend/* root@YOUR_SERVER_IP:/opt/inspection/frontend/
 ssh root@YOUR_SERVER_IP "cd /opt/inspection/frontend && npm run build"
 ```
 
-一键部署脚本 `deploy.sh`：
+### 一键部署脚本
 
 <details>
 <summary>点击展开 / deploy.sh 完整脚本</summary>
@@ -329,4 +356,12 @@ pydantic-settings
 apscheduler
 ```
 
-前端依赖：Vue 3.5+、Element Plus 2.8+、Axios 1.7+、vuedraggable 4.1+（拖动排序）、SortableJS 1.15+。
+## 前端依赖
+
+| 依赖 | 版本 |
+|------|------|
+| Vue | 3.5+ |
+| Element Plus | 2.8+ |
+| Axios | 1.7+ |
+| vuedraggable | 4.1+ |
+| SortableJS | 1.15+ |
