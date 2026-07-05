@@ -341,18 +341,18 @@ systemctl restart inspection
 
 ## Python 依赖
 
-```text
-fastapi==0.118.0
-uvicorn[standard]
-sqlalchemy==2.0.45
-python-multipart
-python-docx==1.2.0
-Pillow==12.1.1
-smbprotocol==1.16.1
-pydantic==2.12.5
-pydantic-settings
-apscheduler
-```
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| fastapi | 0.118.0 | Web 框架 |
+| uvicorn | latest | ASGI 服务器 |
+| sqlalchemy | 2.0.45 | ORM 数据库操作 |
+| python-multipart | latest | 文件上传解析 |
+| python-docx | 1.2.0 | Word 报告生成 |
+| Pillow | 12.1.1 | 图片压缩处理 |
+| smbprotocol | 1.16.1 | SMB 共享上传 |
+| pydantic | 2.12.5 | 数据校验 |
+| pydantic-settings | latest | 配置管理 |
+| apscheduler | latest | 定时任务
 
 ## 前端依赖
 
