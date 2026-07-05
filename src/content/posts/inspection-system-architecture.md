@@ -220,9 +220,6 @@ WantedBy=multi-user.target
 
 ## 常见问题排查
 
-<details>
-<summary>点击展开 / 排查指南</summary>
-
 **服务无法启动：**
 
 ```bash
@@ -259,8 +256,6 @@ ls -la /opt/inspection/frontend/dist/ # 检查构建产物
 # 重新构建前端
 cd /opt/inspection/frontend && npm run build
 ```
-
-</details>
 
 ## 部署流程
 
