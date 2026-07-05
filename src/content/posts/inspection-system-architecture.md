@@ -212,20 +212,11 @@ WantedBy=multi-user.target
 
 ## 数据备份与恢复
 
-```bash
-# 备份数据库
-cp /opt/inspection/backend/data/inspection.db \
-   /opt/inspection/backend/data/inspection_$(date +%Y%m%d).db
-
-# 备份报告
-tar -czf /tmp/reports_$(date +%Y%m%d).tar.gz /opt/inspection/backend/reports/
-
-# 恢复数据库
-systemctl stop inspection
-cp /opt/inspection/backend/data/inspection.db.bak \
-   /opt/inspection/backend/data/inspection.db
-systemctl start inspection
-```
+| 操作 | 命令 |
+|------|------|
+| 备份数据库 | `cp /opt/inspection/backend/data/inspection.db /opt/inspection/backend/data/inspection_\$(date +%Y%m%d).db` |
+| 备份报告 | `tar -czf /tmp/reports_\$(date +%Y%m%d).tar.gz /opt/inspection/backend/reports/` |
+| 恢复数据库 | `systemctl stop inspection && cp /opt/inspection/backend/data/inspection.db.bak /opt/inspection/backend/data/inspection.db && systemctl start inspection` |
 
 ## 常见问题排查
 
@@ -273,19 +264,10 @@ cd /opt/inspection/frontend && npm run build
 
 ## 部署流程
 
-### 后端更新
-
-```bash
-scp -r ./backend/* root@YOUR_SERVER_IP:/opt/inspection/backend/
-ssh root@YOUR_SERVER_IP "systemctl restart inspection"
-```
-
-### 前端更新
-
-```bash
-scp -r ./frontend/* root@YOUR_SERVER_IP:/opt/inspection/frontend/
-ssh root@YOUR_SERVER_IP "cd /opt/inspection/frontend && npm run build"
-```
+| 部署类型 | 操作 |
+|----------|------|
+| 后端更新 | `scp -r ./backend/* root@YOUR_SERVER_IP:/opt/inspection/backend/ && ssh root@YOUR_SERVER_IP "systemctl restart inspection"` |
+| 前端更新 | `scp -r ./frontend/* root@YOUR_SERVER_IP:/opt/inspection/frontend/ && ssh root@YOUR_SERVER_IP "cd /opt/inspection/frontend && npm run build"` |
 
 ### 一键部署脚本
 
@@ -321,9 +303,11 @@ echo "=== 部署完成 ==="
 
 添加新巡检点需要同步修改三个文件：
 
-1. `backend/app/schemas.py` — Pydantic 模型 + `POINT_DEFINITIONS`
-2. `backend/app/models.py` — SQLAlchemy 数据库模型
-3. `frontend/src/utils/definitions.js` — 前端定义
+| 序号 | 文件 | 说明 |
+|------|------|------|
+| 1 | `backend/app/schemas.py` | Pydantic 模型 + `POINT_DEFINITIONS` |
+| 2 | `backend/app/models.py` | SQLAlchemy 数据库模型 |
+| 3 | `frontend/src/utils/definitions.js` | 前端定义 |
 
 修改后需要删除旧数据库并重启服务：
 
