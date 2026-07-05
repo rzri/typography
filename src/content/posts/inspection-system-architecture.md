@@ -172,9 +172,6 @@ SMB 共享配置：
 
 ## 服务管理
 
-<details>
-<summary>点击展开 / 服务管理命令</summary>
-
 ```bash
 # 状态检查
 systemctl status inspection
@@ -191,8 +188,6 @@ journalctl -u inspection -f          # 实时日志
 journalctl -u inspection -n 100      # 最近 100 行
 tail -f /var/log/nginx/access.log    # nginx 访问日志
 ```
-
-</details>
 
 ### Systemd 服务配置
 
